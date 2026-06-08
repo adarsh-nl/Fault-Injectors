@@ -1,0 +1,11 @@
+numpy
+matplotlib
+opencv-python-headless
+Pillow
+tqdm
+open3d
+plyfile
+plotly
+scipy
+huggingface_hub
+jupyter

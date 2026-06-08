@@ -1,0 +1,21 @@
+# Dataset files - never push these
+datasets/
+*.zip
+*.bin
+*.ply
+*.png
+*.jpg
+*.jpeg
+
+# Notebook checkpoints
+.ipynb_checkpoints/
+
+# Python
+__pycache__/
+*.pyc
+.env
+venv/
+
+# OS
+.DS_Store
+Thumbs.db
