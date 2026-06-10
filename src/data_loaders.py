@@ -1,8 +1,7 @@
 """
 data_loaders.py
 ---------------
-All file I/O for the Griffin dataset.
-Handles images, LiDAR point clouds, poses, calibration, and labels.
+All file I/O for the Griffin dataset: images, LiDAR, poses, calibration, labels.
 """
 
 import os
@@ -20,31 +19,22 @@ def get_file_lists(veh_root, drone_root=None):
     """
     Build sorted file lists for all data types.
 
-    Parameters
-    ----------
-    veh_root  : str  Path to vehicle-side root directory.
-    drone_root: str  Path to drone-side root directory (optional).
-
-    Returns
-    -------
-    dict with keys:
-        veh_fronts, veh_backs, veh_lefts, veh_rights,
-        lidar_plys, pose_files, label_files,
-        drone_fronts, drone_backs, drone_lefts, drone_rights, drone_bottoms
+    Returns a dict with keys: veh_fronts, veh_backs, veh_lefts, veh_rights,
+    lidar_plys, pose_files, label_files, and (if drone_root given)
+    drone_fronts, drone_backs, drone_lefts, drone_rights, drone_bottoms.
     """
     def _glob(base, *parts):
         return sorted(glob.glob(os.path.join(base, *parts)))
 
     lists = {
-        'veh_fronts' : _glob(veh_root, 'camera', 'front',      '*.png'),
-        'veh_backs'  : _glob(veh_root, 'camera', 'back',       '*.png'),
-        'veh_lefts'  : _glob(veh_root, 'camera', 'left',       '*.png'),
-        'veh_rights' : _glob(veh_root, 'camera', 'right',      '*.png'),
-        'lidar_plys' : _glob(veh_root, 'lidar',  'lidar_top',  '*.ply'),
-        'pose_files' : _glob(veh_root, 'pose',                 '*.json'),
-        'label_files': _glob(veh_root, 'label',                '*.txt'),
+        'veh_fronts' : _glob(veh_root, 'camera', 'front',     '*.png'),
+        'veh_backs'  : _glob(veh_root, 'camera', 'back',      '*.png'),
+        'veh_lefts'  : _glob(veh_root, 'camera', 'left',      '*.png'),
+        'veh_rights' : _glob(veh_root, 'camera', 'right',     '*.png'),
+        'lidar_plys' : _glob(veh_root, 'lidar',  'lidar_top', '*.ply'),
+        'pose_files' : _glob(veh_root, 'pose',               '*.json'),
+        'label_files': _glob(veh_root, 'label',              '*.txt'),
     }
-
     if drone_root:
         lists.update({
             'drone_fronts'  : _glob(drone_root, 'camera', 'front',  '*.png'),
@@ -53,24 +43,13 @@ def get_file_lists(veh_root, drone_root=None):
             'drone_rights'  : _glob(drone_root, 'camera', 'right',  '*.png'),
             'drone_bottoms' : _glob(drone_root, 'camera', 'bottom', '*.png'),
         })
-
     return lists
 
 
 # ── Image loader ───────────────────────────────────────────────────────────
 
 def load_image(path):
-    """
-    Load an image as an (H, W, 3) uint8 RGB numpy array.
-
-    Parameters
-    ----------
-    path : str  Path to image file (.png or .jpg).
-
-    Returns
-    -------
-    np.ndarray  shape (H, W, 3), dtype uint8
-    """
+    """Load an image as an (H, W, 3) uint8 RGB array."""
     return np.array(Image.open(path).convert('RGB'))
 
 
@@ -80,16 +59,13 @@ def load_lidar(ply_path):
     """
     Load a Griffin LiDAR .ply file.
 
-    Griffin stores LiDAR fields as: x, y, z (ENU world frame) and I (intensity).
-    Points are in the ENU world frame, not the ego or sensor frame.
-
-    Parameters
-    ----------
-    ply_path : str  Path to .ply file.
+    IMPORTANT: Griffin LiDAR points are in the EGO (vehicle) frame — the car is
+    at the origin, X=forward, Y=left, Z=up. They are NOT in the ENU world frame.
+    Fields are x, y, z and I (intensity, uppercase).
 
     Returns
     -------
-    np.ndarray  shape (N, 4), dtype float32 — columns: x, y, z, intensity
+    np.ndarray (N, 4)  float32 — columns: x, y, z, intensity (ego frame)
     """
     ply = PlyData.read(ply_path)
     v   = ply['vertex']
@@ -104,20 +80,19 @@ def load_lidar(ply_path):
 
 def load_pose_griffin(pose_path):
     """
-    Load ego pose and return T_ENU_to_ego (4x4).
+    Load ego pose. Returns (T_ENU_to_ego, raw_pose_dict).
 
-    The pose file gives the vehicle's position and orientation in the ENU
-    world frame. Griffin uses Euler order 'xyz' (roll, pitch, yaw) as
-    documented in space_utils.py.
+    The pose gives the vehicle's position and orientation in the ENU world
+    frame. Euler order is 'xyz' (roll, pitch, yaw), per Griffin's space_utils.py.
 
-    Parameters
-    ----------
-    pose_path : str  Path to pose .json file.
+    The returned T_ENU_to_ego transforms world -> ego. Its inverse
+    (T_ego_to_ENU) transforms ego -> world; use that to place ego-frame data
+    (LiDAR points, boxes) into the world for a world-frame viewer.
 
     Returns
     -------
-    np.ndarray  shape (4, 4) — T_ENU_to_ego transform matrix
-    dict        raw pose data (x, y, z, roll, pitch, yaw, timestamp, velocity)
+    T_ENU_to_ego : np.ndarray (4, 4)
+    pose         : dict  (x, y, z, roll, pitch, yaw, velocity, timestamp)
     """
     with open(pose_path) as f:
         p = json.load(f)
@@ -130,7 +105,7 @@ def load_pose_griffin(pose_path):
     T_ego_to_ENU[:3, :3] = R_mat
     T_ego_to_ENU[:3,  3] = [p['x'], p['y'], p['z']]
 
-    return np.linalg.inv(T_ego_to_ENU), p   # T_ENU_to_ego, raw pose dict
+    return np.linalg.inv(T_ego_to_ENU), p
 
 
 # ── Calibration loader ────────────────────────────────────────────────────
@@ -139,26 +114,26 @@ def load_calib_griffin(calib_dir, camera='front'):
     """
     Load calibration for one camera.
 
-    The extrinsic matrix in the calibration file is T_sensor_to_ego:
-    it transforms a point from camera coordinates into ego coordinates.
-    We invert it to get T_ego_to_sensor for projection.
-
-    Parameters
-    ----------
-    calib_dir : str  Path to the calib/ directory.
-    camera    : str  One of 'front', 'back', 'left', 'right'.
+    The extrinsic in the file is T_sensor_to_ego (camera -> ego). We invert it
+    to T_ego_to_sensor for projecting ego-frame points into the camera.
 
     Returns
     -------
-    K               : np.ndarray (3, 3) — intrinsic matrix
-    T_ego_to_sensor : np.ndarray (4, 4) — ego -> camera transform
+    K               : np.ndarray (3, 3)  intrinsic matrix
+    T_ego_to_sensor : np.ndarray (4, 4)  ego -> camera transform
     """
     with open(os.path.join(calib_dir, f'{camera}.json')) as f:
         cal = json.load(f)
-
     K               = np.array(cal['intrinsic'],  dtype=np.float64)
     T_sensor_to_ego = np.array(cal['extrinsic'],  dtype=np.float64)
     return K, np.linalg.inv(T_sensor_to_ego)
+
+
+def load_sensor_extrinsic(calib_dir, sensor):
+    """Return T_sensor_to_ego (4x4) for any sensor, including lidar_top."""
+    with open(os.path.join(calib_dir, f'{sensor}.json')) as f:
+        cal = json.load(f)
+    return np.array(cal['extrinsic'], dtype=np.float64)
 
 
 # ── Label loader ──────────────────────────────────────────────────────────
@@ -167,20 +142,10 @@ def parse_label_txt(label_path):
     """
     Parse a Griffin label .txt file into a list of annotation dicts.
 
-    Each line format (space-separated):
-        category  x  y  z  l  w  h  roll  pitch  yaw  track_id  visibility
-
-    where x,y,z is the box centre in ego frame (metres),
-    l,w,h are dimensions (metres), roll/pitch/yaw are in degrees,
-    and visibility is in [0, 1].
-
-    Parameters
-    ----------
-    label_path : str  Path to label .txt file.
-
-    Returns
-    -------
-    list of dict
+    Line format (space-separated):
+        category x y z l w h roll pitch yaw track_id visibility
+    where x,y,z is the box centre in EGO frame (metres), l,w,h are dimensions,
+    roll/pitch/yaw are degrees, visibility in [0, 1].
     """
     anns = []
     with open(label_path) as f:
@@ -207,31 +172,19 @@ def parse_label_txt(label_path):
 
 def load_labels_for_frame(veh_root, pose_files, frame_idx):
     """
-    Load annotations for a given frame index, matched by timestamp.
+    Load annotations for a frame index, matched by timestamp.
 
-    Parameters
-    ----------
-    veh_root   : str   Path to vehicle-side root directory.
-    pose_files : list  Sorted list of pose file paths.
-    frame_idx  : int   Frame index.
-
-    Returns
-    -------
-    list of dict  — annotation list (may be empty if no objects in frame)
+    Returns a list of annotation dicts (empty if none).
     """
     label_dir = os.path.join(veh_root, 'label')
-
     with open(pose_files[frame_idx]) as f:
         ts = int(json.load(f)['timestamp'])
 
-    # Primary: timestamp-based filename
     label_path = os.path.join(label_dir, f'{ts:06d}.txt')
     if os.path.exists(label_path):
         return parse_label_txt(label_path)
 
-    # Fallback: sorted index
     all_labels = sorted(glob.glob(os.path.join(label_dir, '*.txt')))
     if all_labels and frame_idx < len(all_labels):
         return parse_label_txt(all_labels[frame_idx])
-
     return []

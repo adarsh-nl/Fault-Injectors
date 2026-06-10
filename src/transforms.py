@@ -1,93 +1,83 @@
 """
 transforms.py
 -------------
-Coordinate frame transforms and LiDAR-to-image projection for Griffin.
+Coordinate frame transforms and projection for Griffin.
+
+IMPORTANT — frame of the LiDAR points
+-------------------------------------
+Griffin LiDAR .ply points are stored in the EGO (vehicle) frame: the car sits
+at the origin, X=forward, Y=left, Z=up. They are NOT in the ENU world frame.
+(The large coordinate ranges seen in some scans are just far-field returns in a
+large scene, still expressed relative to the ego.)
+
+Consequences:
+  - Projecting LiDAR onto a camera goes EGO -> SENSOR -> IMAGE directly.
+    No pose transform is involved.
+  - Annotations are also in the ego frame, so they use the same path.
+  - The pose (T_ENU_to_ego / its inverse) is only needed when you want to place
+    ego-frame data into the world frame, e.g. a world-frame 3D viewer.
 
 Frame conventions
 -----------------
-ENU (world)   : X=East, Y=North, Z=Up  — LiDAR points stored here
-Ego (vehicle) : X=forward, Y=left, Z=up — annotations stored here
-Camera        : X=right, Y=down, Z=forward (depth) — OpenCV convention
-
-Pipeline for LiDAR -> image
-----------------------------
-  pts_ENU
-    -> T_ENU_to_ego       (inv of pose: ego position in ENU)
-    -> T_ego_to_sensor    (inv of extrinsic: sensor position in ego)
-    -> K                  (pinhole projection, Z=depth)
-    -> (u, v) pixels
-
-Pipeline for annotations -> image (already in ego frame)
-----------------------------------------------------------
-  pts_ego
-    -> T_ego_to_sensor
-    -> K
-    -> (u, v) pixels
+ENU (world)   : X=East, Y=North, Z=Up
+Ego (vehicle) : X=forward, Y=left, Z=up   <- LiDAR points and annotations live here
+Camera        : X=right, Y=down, Z=forward (depth), OpenCV convention
 """
 
 import numpy as np
 
 
-def project_lidar_to_image(pts_ENU, K, T_ego_to_sensor, T_ENU_to_ego,
-                            img_h, img_w, max_depth=80.0):
+def project_lidar_to_image(pts_ego, K, T_ego_to_sensor, img_h, img_w, max_depth=80.0):
     """
-    Project LiDAR points (ENU world frame) onto an image plane.
+    Project LiDAR points (EGO frame) onto an image plane.
+
+    Pipeline: ego -> sensor (via T_ego_to_sensor) -> pixel (via K, Z=depth).
+    No pose transform, because the points are already ego-centred.
 
     Parameters
     ----------
-    pts_ENU        : np.ndarray (N, 3)  LiDAR points in ENU world frame.
+    pts_ego        : np.ndarray (N, 3)  LiDAR points in ego frame.
     K              : np.ndarray (3, 3)  Camera intrinsic matrix.
     T_ego_to_sensor: np.ndarray (4, 4)  Ego -> sensor transform.
-    T_ENU_to_ego   : np.ndarray (4, 4)  ENU -> ego transform (inv pose).
     img_h, img_w   : int                Image dimensions.
-    max_depth      : float              Maximum depth to keep (metres).
+    max_depth      : float              Max depth to keep (metres).
 
     Returns
     -------
     np.ndarray (M, 3)  columns: u (pixel col), v (pixel row), depth (m)
     """
-    N = pts_ENU.shape[0]
+    N = pts_ego.shape[0]
+    pts_s = (T_ego_to_sensor @ np.hstack([pts_ego, np.ones((N, 1))]).T).T[:, :3]
 
-    # Combine ENU -> ego -> sensor into a single 4x4
-    T = T_ego_to_sensor @ T_ENU_to_ego
-
-    pts_h = np.hstack([pts_ENU, np.ones((N, 1))])
-    pts_s = (T @ pts_h.T).T[:, :3]
-
-    # Depth = Z in sensor frame; keep only points in front of camera
     depth = pts_s[:, 2]
     mask  = depth > 0.1
-    pts_s = pts_s[mask]
-    depth = depth[mask]
+    pts_s, depth = pts_s[mask], depth[mask]
 
-    # Pinhole projection
     proj = (K @ pts_s.T).T
-    u    = proj[:, 0] / depth
-    v    = proj[:, 1] / depth
+    u = proj[:, 0] / depth
+    v = proj[:, 1] / depth
 
-    # Image bounds filter
     valid = (u >= 0) & (u < img_w) & (v >= 0) & (v < img_h) & (depth < max_depth)
     return np.stack([u[valid], v[valid], depth[valid]], axis=1)
 
 
 def project_ego_to_img(pts_ego, K, T_ego_to_sensor, img_h, img_w):
     """
-    Project ego-frame points onto the image plane.
-
-    Used for projecting bounding box corners (which are in ego frame,
-    not ENU frame). The pose transform is NOT applied here.
+    Project ego-frame points onto the image plane, KEEPING all points (no
+    in-image filtering) so callers can preserve connectivity, e.g. drawing the
+    12 edges of a 3D box. Points behind the camera get depth <= 0.
 
     Parameters
     ----------
-    pts_ego        : np.ndarray (N, 3)  Points in ego frame.
-    K              : np.ndarray (3, 3)  Camera intrinsic matrix.
-    T_ego_to_sensor: np.ndarray (4, 4)  Ego -> sensor transform.
-    img_h, img_w   : int                Image dimensions.
+    pts_ego        : np.ndarray (N, 3)
+    K              : np.ndarray (3, 3)
+    T_ego_to_sensor: np.ndarray (4, 4)
+    img_h, img_w   : int
 
     Returns
     -------
     np.ndarray (N, 3)  columns: u, v, depth
-                        u=-9999 or depth<=0 means point is behind camera.
+                        depth <= 0 means the point is behind the camera.
     """
     N     = pts_ego.shape[0]
     pts_s = (T_ego_to_sensor @ np.hstack([pts_ego, np.ones((N, 1))]).T).T[:, :3]
@@ -100,15 +90,15 @@ def project_ego_to_img(pts_ego, K, T_ego_to_sensor, img_h, img_w):
 
 def ego_box_corners_3d(ann):
     """
-    Compute the 8 corners of a 3D bounding box in the ego frame.
+    8 corners of a 3D bounding box in the ego frame.
 
     Parameters
     ----------
-    ann : dict  Annotation dict with keys x,y,z,l,w,h,yaw (yaw in degrees).
+    ann : dict  with keys x, y, z, l, w, h, yaw (yaw in degrees).
 
     Returns
     -------
-    np.ndarray (8, 3)  Box corners in ego frame.
+    np.ndarray (8, 3)
     """
     cx, cy, cz = ann['x'], ann['y'], ann['z']
     l, w, h    = ann['l'], ann['w'], ann['h']
@@ -129,15 +119,15 @@ def ego_box_corners_3d(ann):
 
 def ann_to_ego_corners_bev(ann):
     """
-    Compute the 4 BEV footprint corners of a box in ego frame.
+    4 BEV footprint corners of a box in ego frame.
 
     Parameters
     ----------
-    ann : dict  Annotation dict with keys x,y,l,w,yaw (yaw in degrees).
+    ann : dict  with keys x, y, l, w, yaw (yaw in degrees).
 
     Returns
     -------
-    np.ndarray (4, 2)  BEV corners (x, y).
+    np.ndarray (4, 2)
     """
     cx, cy = ann['x'], ann['y']
     l, w   = ann['l'], ann['w']
@@ -147,3 +137,23 @@ def ann_to_ego_corners_bev(ann):
     corners = np.array([[ dx,  dy], [ dx, -dy], [-dx, -dy], [-dx,  dy]])
     R2 = np.array([[cy_r, -sy_r], [sy_r, cy_r]])
     return (R2 @ corners.T).T + np.array([cx, cy])
+
+
+def ego_points_to_world(pts_ego, T_ego_to_ENU):
+    """
+    Lift ego-frame points into the ENU world frame.
+
+    Used by the world-frame 3D viewer, where the car drives through a fixed
+    scene. Not used for camera projection.
+
+    Parameters
+    ----------
+    pts_ego      : np.ndarray (N, 3)  points in ego frame.
+    T_ego_to_ENU : np.ndarray (4, 4)  ego -> ENU transform (inverse of pose).
+
+    Returns
+    -------
+    np.ndarray (N, 3)  points in ENU world frame.
+    """
+    N = pts_ego.shape[0]
+    return (T_ego_to_ENU @ np.hstack([pts_ego, np.ones((N, 1))]).T).T[:, :3]
