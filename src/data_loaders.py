@@ -55,17 +55,30 @@ def load_image(path):
 
 # ── LiDAR loader ──────────────────────────────────────────────────────────
 
-def load_lidar(ply_path):
+def load_lidar(ply_path, apply_mount=True):
     """
-    Load a Griffin LiDAR .ply file.
+    Load a Griffin LiDAR .ply file and return points in the EGO frame.
 
-    IMPORTANT: Griffin LiDAR points are in the EGO (vehicle) frame — the car is
-    at the origin, X=forward, Y=left, Z=up. They are NOT in the ENU world frame.
-    Fields are x, y, z and I (intensity, uppercase).
+    IMPORTANT: the raw .ply coordinates are in the LIDAR SENSOR frame (the
+    sensor at the origin, X=forward, Y=left, Z=up). The sensor is mounted
+    ~[0.25, 0.00, 1.10] m from the ego origin, so raw points are offset from
+    the ego frame — most visibly 1.10 m in z (the road sits at z = -1.10 in
+    the raw data, and at z = 0 after correction).
+
+    By default this function applies the lidar_top mount extrinsic
+    (T_lidar_to_ego, auto-located at <vehicle-side>/calib/lidar_top.json
+    relative to the .ply path) and returns true ego-frame points, so all
+    downstream code can treat the output as ego frame.
+
+    Parameters
+    ----------
+    ply_path    : str   path to the .ply file.
+    apply_mount : bool  if False, return raw sensor-frame points.
 
     Returns
     -------
-    np.ndarray (N, 4)  float32 — columns: x, y, z, intensity (ego frame)
+    np.ndarray (N, 4)  float32 — columns: x, y, z, intensity (EGO frame
+                        when apply_mount=True, sensor frame otherwise)
     """
     ply = PlyData.read(ply_path)
     v   = ply['vertex']
@@ -73,7 +86,26 @@ def load_lidar(ply_path):
     y   = np.array(v['y'], dtype=np.float32)
     z   = np.array(v['z'], dtype=np.float32)
     I   = np.array(v['I'], dtype=np.float32)
-    return np.stack([x, y, z, I], axis=1)
+    pts = np.stack([x, y, z, I], axis=1)
+
+    if apply_mount:
+        # .ply lives at <vehicle-side>/lidar/lidar_top/<ts>.ply
+        # calib lives at <vehicle-side>/calib/lidar_top.json
+        from pathlib import Path
+        calib_path = Path(ply_path).resolve().parents[2] / 'calib' / 'lidar_top.json'
+        if calib_path.exists():
+            with open(calib_path) as f:
+                T_lidar_to_ego = np.array(json.load(f)['extrinsic'], dtype=np.float64)
+            N = pts.shape[0]
+            pts_h = np.hstack([pts[:, :3], np.ones((N, 1), dtype=np.float32)])
+            pts[:, :3] = (T_lidar_to_ego @ pts_h.T).T[:, :3].astype(np.float32)
+        else:
+            import warnings
+            warnings.warn(
+                f'lidar_top.json not found at {calib_path}; returning RAW '
+                f'sensor-frame points (offset ~1.1 m in z from ego frame).'
+            )
+    return pts
 
 
 # ── Pose loader ───────────────────────────────────────────────────────────
