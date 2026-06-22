@@ -14,7 +14,8 @@ corrupted sample following the formal definitions in the project's fault spec.
 
 Modules
 -------
-missing_modality : sensor dropout (Bernoulli-gated zeroing / emptying)
+missing_modality      : sensor dropout (Bernoulli-gated zeroing / emptying)
+temporal_misalignment : stale image pairing via index shifting
 """
 
 from .missing_modality import (
@@ -23,10 +24,18 @@ from .missing_modality import (
     drop_points,
     bernoulli_mask,
 )
+from .temporal_misalignment import (
+    TemporalMisalignmentInjector,
+    sample_index_shift,
+    physical_displacement,
+)
 
 __all__ = [
     'MissingModalityInjector',
     'drop_image',
     'drop_points',
     'bernoulli_mask',
+    'TemporalMisalignmentInjector',
+    'sample_index_shift',
+    'physical_displacement',
 ]
