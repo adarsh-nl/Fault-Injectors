@@ -19,3 +19,9 @@ venv/
 # OS
 .DS_Store
 Thumbs.db
+
+# dataset and rendered outputs (not source)
+main/
+results/
+output_animation.mp4
+*.mp4
