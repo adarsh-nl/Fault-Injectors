@@ -27,6 +27,12 @@ Camera        : X=right, Y=down, Z=forward (depth), OpenCV convention
 import numpy as np
 
 
+def _apply_transform(T, pts):
+    """Apply a 4x4 homogeneous transform to (N, 3) points, returning (N, 3)."""
+    N = pts.shape[0]
+    return (T @ np.hstack([pts, np.ones((N, 1))]).T).T[:, :3]
+
+
 def project_lidar_to_image(pts_ego, K, T_ego_to_sensor, img_h, img_w, max_depth=80.0):
     """
     Project LiDAR points (EGO frame) onto an image plane.
@@ -46,9 +52,7 @@ def project_lidar_to_image(pts_ego, K, T_ego_to_sensor, img_h, img_w, max_depth=
     -------
     np.ndarray (M, 3)  columns: u (pixel col), v (pixel row), depth (m)
     """
-    N = pts_ego.shape[0]
-    pts_s = (T_ego_to_sensor @ np.hstack([pts_ego, np.ones((N, 1))]).T).T[:, :3]
-
+    pts_s = _apply_transform(T_ego_to_sensor, pts_ego)
     depth = pts_s[:, 2]
     mask  = depth > 0.1
     pts_s, depth = pts_s[mask], depth[mask]
@@ -79,8 +83,7 @@ def project_ego_to_img(pts_ego, K, T_ego_to_sensor, img_h, img_w):
     np.ndarray (N, 3)  columns: u, v, depth
                         depth <= 0 means the point is behind the camera.
     """
-    N     = pts_ego.shape[0]
-    pts_s = (T_ego_to_sensor @ np.hstack([pts_ego, np.ones((N, 1))]).T).T[:, :3]
+    pts_s = _apply_transform(T_ego_to_sensor, pts_ego)
     depth = pts_s[:, 2]
     proj  = (K @ pts_s.T).T
     u = np.where(depth > 0.01, proj[:, 0] / np.maximum(depth, 1e-6), -9999.0)
@@ -155,5 +158,29 @@ def ego_points_to_world(pts_ego, T_ego_to_ENU):
     -------
     np.ndarray (N, 3)  points in ENU world frame.
     """
-    N = pts_ego.shape[0]
-    return (T_ego_to_ENU @ np.hstack([pts_ego, np.ones((N, 1))]).T).T[:, :3]
+    return _apply_transform(T_ego_to_ENU, pts_ego)
+
+
+def boxes_2d_for_frame(anns, K, T_ego_to_sensor, img_h, img_w, min_vis=0.0):
+    """2D pixel boxes (x0, y0, x1, y1) for each annotation visible in a camera.
+
+    Each box is the axis-aligned extent of the projected 3D box corners that lie
+    in front of the camera, clipped to the image. Annotations with visibility
+    below ``min_vis`` are skipped. Used to drive occlusion placement / coverage
+    and to overlay ground truth in the visualisations.
+    """
+    boxes = []
+    for ann in anns:
+        if ann.get('visibility', 1.0) < min_vis:
+            continue
+        uvd   = project_ego_to_img(ego_box_corners_3d(ann), K, T_ego_to_sensor, img_h, img_w)
+        front = uvd[uvd[:, 2] > 0.1]                 # corners in front of the camera
+        if len(front) < 2:
+            continue
+        x0, y0 = front[:, 0].min(), front[:, 1].min()
+        x1, y1 = front[:, 0].max(), front[:, 1].max()
+        x0, x1 = np.clip([x0, x1], 0, img_w)
+        y0, y1 = np.clip([y0, y1], 0, img_h)
+        if x1 - x0 > 2 and y1 - y0 > 2:
+            boxes.append((float(x0), float(y0), float(x1), float(y1)))
+    return boxes
