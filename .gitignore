@@ -25,3 +25,5 @@ main/
 results/
 output_animation.mp4
 *.mp4
+src/fault_injectors/npy/
+*.mp4
