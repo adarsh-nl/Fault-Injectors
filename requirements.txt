@@ -9,3 +9,5 @@ plotly
 scipy
 huggingface_hub
 jupyter
+scikit-image
+pyyaml
