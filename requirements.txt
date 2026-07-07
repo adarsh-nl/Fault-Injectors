@@ -6,8 +6,8 @@ tqdm
 open3d
 plyfile
 plotly
+pyyaml
 scipy
 huggingface_hub
 jupyter
 scikit-image
-pyyaml

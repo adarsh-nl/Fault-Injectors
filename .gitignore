@@ -1,11 +1,16 @@
-# Dataset files - never push these
-datasets/
+# Downloaded dataset files - never push these (root-level only;
+# src/datasets/ is source code)
+/datasets/
 *.zip
 *.bin
 *.ply
 *.png
 *.jpg
 *.jpeg
+*.pcd
+
+# ...but bundled package assets are source, keep them
+!src/fault_injectors/assets/*.png
 
 # Notebook checkpoints
 .ipynb_checkpoints/
@@ -15,6 +20,7 @@ __pycache__/
 *.pyc
 .env
 venv/
+.venv/
 
 # OS
 .DS_Store
@@ -26,4 +32,3 @@ results/
 output_animation.mp4
 *.mp4
 src/fault_injectors/npy/
-*.mp4
