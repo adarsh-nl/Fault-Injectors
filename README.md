@@ -1,125 +1,174 @@
-# Griffin Dataset Visualisation
+# Fault Injectors for Cooperative Perception
 
-Tools for exploring and visualising the Griffin aerial-ground cooperative
-perception dataset (arXiv:2503.06983, 2025), plus fault-injection and
-information-quality utilities for robustness research.
+A dataset-agnostic fault-injection toolkit for robustness testing of
+multi-modal and multi-agent (V2V / V2X) 3-D perception, plus
+information-quality (mutual information) analysis and visualisation tools.
 
-## Repository structure
+Originally built around the Griffin aerial-ground dataset
+(arXiv:2503.06983); now every dataset is normalised through an adapter
+layer into one cooperative sample model, so the same faults, severity
+sweeps and analysis run unchanged on:
 
-```
-griffin-visualisation/
-  src/
-    download_griffin.py        download a subset from Hugging Face (CLI + importable)
-    data_loaders.py            file I/O: images, LiDAR, poses, calibration, labels
-    transforms.py              projection and coordinate transforms (ego frame)
-    visualisation.py           plotting helpers
-    fault_injectors/           fault injection package
-      missing_modality.py      Failure Mode 1: Bernoulli sensor dropout
-      temporal_misalignment.py Failure Mode 2: stale-image index shifting
-    info_quality/              information-quality (mutual information) package
-      estimators.py            InfoNCE + SMILE MI lower-bound estimators (agnostic core)
-      preprocessing.py         seeding, standardisation, PCA
-      feature_extraction.py    generic hook-based feature collection (only model-aware file)
-      reporting.py             tables, fusion summary, comparison plots
-      run_mi.py                CLI: python -m src.info_quality.run_mi
-      tests/                   pytest suite (synthetic ground-truth)
-    __init__.py
-  examples/
-    collect_bevfusion_features.py   BEVFusion -> FeatureCollector adapter
-  notebooks/
-    quick_start.ipynb                      load a frame and visualise it
-    griffin_visualisation_tutorial.ipynb   full walkthrough
-    temporal_animation.ipynb               multi-camera animation
-    viser_viewer.py                        interactive 3D viewer (world frame)
-    fault_injection_visualisation.ipynb    clean vs faulty, incl. compare animations
-  docs/
-    tutorial_guide.md
-    coordinate_transformation.md           coordinate maths from scratch
-    information_quality.md                  mutual information for fusion robustness
-    animation_deep_dive.md
-  requirements.txt
-  requirements-info-quality.txt            extra deps for the info_quality module
-```
+| dataset      | adapter                     | used by                                   |
+|--------------|-----------------------------|-------------------------------------------|
+| Griffin      | `load_dataset('griffin')`   | aerial-ground cooperative perception       |
+| OPV2V        | `load_dataset('opv2v')`     | V2VNet (OpenCOOD re-impl), CoBEVT, Where2comm |
+| V2XSet       | `load_dataset('v2xset')`    | V2X-ViT                                    |
+| DAIR-V2X-C   | `load_dataset('dair-v2x')`  | real vehicle-infrastructure cooperation    |
+| yours        | subclass `BaseDataset` (3 methods) — see `docs/datasets.md` |
 
-## Key fact about coordinates
+## Failure modes
 
-Griffin LiDAR points and 3D annotations are in the **ego frame** (the car is at
-the origin). Projecting them onto a camera is ego -> sensor -> image directly,
-with no vehicle-pose transform. See `docs/coordinate_transformation.md`.
+**Sensor-level** (any single platform, plain arrays in / arrays out):
+
+- `MissingModalityInjector` — Bernoulli sensor dropout (black image / empty cloud)
+- `TemporalMisalignmentInjector` — stale image paired with current LiDAR
+- `SensorOcclusionInjector` — lens soiling / scratch / crack (procedural + texture)
+- `LidarSnowInjector`, `LidarFogInjector` — MultiCorrupt/Hahner adverse weather
+- `BrightnessInjector`, `DarknessInjector`, `FogInjector`, `SnowInjector`,
+  `PointsReductionInjector`, `BeamReductionInjector` — MultiCorrupt camera/LiDAR
+
+The MultiCorrupt-backed injectors wrap verbatim backends (`_mc_image.py`,
+`_mc_lidar.py`, `_mc_snow.py`). If a backend file is ever absent from a
+checkout, the package still imports: the affected injectors become stubs
+that raise a clear error on use (`src.fault_injectors.MISSING_OPTIONAL`
+lists what's unavailable).
+
+**Cooperative / V2X-level** (the failure axes the cooperative-perception
+literature actually evaluates):
+
+- `PoseErrorInjector` — Gaussian/Laplace localisation noise on shared agent
+  poses (the V2X-ViT / CoBEVT robustness protocol: σ_xy 0–0.5 m,
+  σ_heading 0–1°)
+- `CommLatencyInjector` — per-agent transmission delay; the ego fuses each
+  sender's stale frame *with its stale pose* (V2X-ViT async setting)
+- `AgentDropInjector` — packet loss / whole-agent dropout, i.i.d. or bursty
+  (Gilbert–Elliott); `p_drop=1` reproduces the no-cooperation baseline
+- `BandwidthLimitInjector` — transmit only a fraction of each sender's
+  points, optionally coordinate-quantised (Where2comm-style budget proxy)
+
+Every injector is seeded-reproducible, and every applied fault is logged in
+`agent.faults` / `sample.meta` so a corrupted run is fully auditable.
 
 ## Quick start
 
 ```bash
 pip install -r requirements.txt
-
-# 1. Download a subset (interactive, or use flags)
-python src/download_griffin.py --list
-python src/download_griffin.py --subset griffin_50scenes_25m --minimal
-
-# 2. Explore
-jupyter notebook notebooks/quick_start.ipynb
-```
-
-### Downloading the data
-
-`src/download_griffin.py` works both as a CLI and as an importable module.
-
-```bash
-python src/download_griffin.py                 # fully interactive
-python src/download_griffin.py --list          # print the catalogue
-python src/download_griffin.py --subset griffin_50scenes_25m --minimal
-python src/download_griffin.py --subset griffin_50scenes_25m --all
 ```
 
 ```python
-from src.download_griffin import download_subset, list_catalogue
-download_subset('griffin_50scenes_25m', files='minimal', dest='./datasets')
+from src.datasets import load_dataset
+from src.pipeline import FaultPipeline
+
+ds = load_dataset('opv2v', '/data/opv2v/test/2021_08_18_09_02_56')
+
+pipe = FaultPipeline.from_config({
+    'latency':    {'mu_delay': 0.1, 'sigma_jitter': 0.02},  # seconds
+    'pose_error': {'sigma_xy': 0.2, 'sigma_heading': 0.2},  # m / degrees
+    'agent_drop': {'p_drop': 0.25},
+    'bandwidth':  {'keep_fraction': 0.5},
+}, fps=ds.fps, seed=7)
+
+sample = pipe(ds, k=0)                    # corrupted CooperativeSample
+pts    = sample.lidar_in_ego_frame('650') # misaligned by the pose fault
 ```
 
-The `--minimal` set (metadata + LiDAR + front + drone-bottom cameras, ~46 GB) is
-enough for all the visualisation tools.
+Severity sweeps are just a loop over configs:
+
+```python
+for sigma in [0.0, 0.1, 0.2, 0.3, 0.4, 0.5]:
+    pipe = FaultPipeline.from_config(
+        {'pose_error': {'sigma_xy': sigma, 'sigma_heading': sigma}},
+        fps=ds.fps, seed=7)
+    evaluate(model, ds, pipe)             # your eval loop
+```
+
+### Testing V2VNet / CoBEVT / Where2comm / V2X-ViT
+
+Those reference implementations run on OpenCOOD.
+`examples/opencood_integration.py` patches faults into any instantiated
+OpenCOOD dataset — one call, no model-specific code:
+
+```python
+from examples.opencood_integration import add_faults_to_dataset
+
+dataset = build_dataset(hypes, visualize=False, train=False)
+add_faults_to_dataset(dataset,
+                      pose_error={'sigma_xy': 0.4, 'sigma_heading': 0.4},
+                      agent_drop={'p_drop': 0.25},
+                      bandwidth={'keep_fraction': 0.5})
+```
+
+### Griffin
+
+```bash
+python src/download_griffin.py --subset griffin_50scenes_25m --minimal
+jupyter notebook notebooks/quick_start.ipynb
+```
+
+```python
+ds = load_dataset('griffin', veh_root='datasets/.../vehicle-side',
+                  drone_root='datasets/.../drone-side')
+```
+
+## Repository structure
+
+```
+src/
+  datasets/                dataset adapters -> one cooperative sample model
+    base.py                BaseDataset, CooperativeSample, AgentFrame, Box3D
+    griffin.py opv2v.py dair_v2x.py pcd.py
+  fault_injectors/         all failure modes (arrays/poses in, arrays/poses out)
+    missing_modality.py temporal_misalignment.py sensor_occlusion.py
+    pose_error.py communication.py lidar_snow.py lidar_fog.py ...
+  pipeline.py              FaultPipeline: compose faults, config-driven sweeps
+  info_quality/            mutual-information fusion analysis (see below)
+  data_loaders.py transforms.py visualisation.py    Griffin-native utilities
+  tests/                   pytest suite w/ synthetic dataset trees (no data needed)
+examples/
+  opencood_integration.py  fault injection inside OpenCOOD dataloaders
+  collect_bevfusion_features.py
+notebooks/                 visualisation + fault-injection walkthroughs
+docs/
+  datasets.md              the sample model + how to add a dataset
+  information_quality.md coordinate_transformation.md Occlusion.md ...
+```
+
+Run the tests (no dataset downloads required):
+
+```bash
+pip install pytest && python -m pytest src/tests src/info_quality/tests -q
+```
 
 ## Information quality (mutual information)
 
 `src/info_quality` measures how much task-relevant information a learned
-representation carries about the target, using mutual information lower bounds.
-For fusion it answers: does the fused representation carry more about the target
-than the best single modality, and how does that margin degrade under fault
+representation carries about the target, using MI lower bounds. For fusion
+it answers: does the fused representation carry more about the target than
+the best single modality, and how does that margin degrade under fault
 injection?
-
-The core quantity is the fusion gain
 
 ```
 delta_I = I(Z_fused; Y) - max(I(Z_camera; Y), I(Z_lidar; Y))
 ```
 
-Positive `delta_I` means fusion is synergistic. Two estimators (InfoNCE and
-SMILE) are run so conclusions do not hinge on a single estimator. MI is always
-reported as a lower bound, never a point estimate.
+Two estimators (InfoNCE and SMILE) are run so conclusions do not hinge on a
+single estimator; MI is always reported as a lower bound.
 
 ```bash
 pip install -r requirements-info-quality.txt
-
-# From saved feature arrays (an .npz or a pickled dict of {name: (N, d)} + Y):
 python -m src.info_quality.run_mi --input features.npz --plot
 ```
 
-```python
-from src.info_quality.estimators import SMILEEstimator, delta_information
-
-mi = {name: SMILEEstimator(holdout=0.3).estimate(Z, Y).mi_nats
-      for name, Z in representations.items()}
-gain = delta_information(mi, fused_key='Z_fused',
-                         unimodal_keys=['Z_camera', 'Z_lidar'])
-```
-
-To pull features out of any PyTorch model, name the modules to tap and let
-`FeatureCollector` hook them; `examples/collect_bevfusion_features.py` is a
-worked BEVFusion adapter. See `docs/information_quality.md` for the full
-explainer, the in-sample-bias caveat, and the fault-injection integration loop.
+See `docs/information_quality.md` for the full explainer and the
+fault-injection integration loop.
 
 ## Links
 
-- Paper: https://arxiv.org/abs/2503.06983 (Griffin, arXiv:2503.06983, 2025)
-- Dataset: https://huggingface.co/datasets/wjh-svm/Griffin
-- Code: https://github.com/wang-jh18-SVM/Griffin
+- Griffin: https://arxiv.org/abs/2503.06983 · https://huggingface.co/datasets/wjh-svm/Griffin
+- OPV2V / OpenCOOD: https://github.com/DerrickXuNu/OpenCOOD
+- V2X-ViT / V2XSet: https://github.com/DerrickXuNu/v2x-vit
+- CoBEVT: https://github.com/DerrickXuNu/CoBEVT
+- Where2comm: https://github.com/MediaBrain-SJTU/Where2comm
+- DAIR-V2X: https://github.com/AIR-THU/DAIR-V2X
+- MultiCorrupt: https://github.com/ika-rwth-aachen/MultiCorrupt
