@@ -1,0 +1,19 @@
+# OPV2V (OpenCOOD folder layout) via src.datasets.OPV2VDataset.
+# On the UT EEMCS HPC the dataset lives under /deepstore; override `root`.
+name: opv2v
+adapter: opv2v
+root: /deepstore/datasets/opv2v          # contains train/ validate/ test/
+train_split: train
+val_split: validate
+test_split: test
+scenarios: null                          # null = all scenario dirs in split
+fps: 10.0
+grid:
+  voxel_size: [0.4, 0.4]
+  point_range: [-140.8, -40.0, -3.0, 140.8, 40.0, 1.0]
+  downsample: 2
+max_points_per_pillar: 32
+max_pillars: 20000
+max_agents: 5
+comm_range_m: 70.0
+categories: null

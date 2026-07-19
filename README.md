@@ -125,6 +125,12 @@ src/
   info_quality/            mutual-information fusion analysis (see below)
   data_loaders.py transforms.py visualisation.py    Griffin-native utilities
   tests/                   pytest suite w/ synthetic dataset trees (no data needed)
+corabench/                 CoRA (arXiv:2512.13191, AAAI 2026) benchmarking
+                           framework: full model implementation + trainer +
+                           fault benchmark runners built ON this toolkit --
+                           corruption via FaultPipeline (physical, upstream),
+                           read-only observation taps at every intermediate
+                           tensor (see corabench/README.md)
 examples/
   opencood_integration.py  fault injection inside OpenCOOD dataloaders
   collect_bevfusion_features.py
@@ -138,6 +144,8 @@ Run the tests (no dataset downloads required):
 
 ```bash
 pip install pytest && python -m pytest src/tests src/info_quality/tests -q
+# corabench additionally needs torch + torchvision:
+python -m pytest corabench/tests -q
 ```
 
 ## Information quality (mutual information)

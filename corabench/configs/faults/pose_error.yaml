@@ -1,0 +1,11 @@
+# Paper Table 1 conditions: pose error on the shared collaborator poses
+# (src.fault_injectors.PoseErrorInjector; sigma_xy [m], sigma_heading [deg]).
+name: pose_error
+pipeline:
+  pose_error: {sigma_xy: 0.4, sigma_heading: 0.4}
+agent_scope: non-ego
+sweep:
+  - {}
+  - {pose_error: {sigma_xy: 0.2, sigma_heading: 0.2}}
+  - {pose_error: {sigma_xy: 0.4, sigma_heading: 0.4}}
+  - {pose_error: {sigma_xy: 0.6, sigma_heading: 0.6}}

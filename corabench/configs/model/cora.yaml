@@ -1,0 +1,60 @@
+# CoRA architecture (paper defaults; assumption flags A1-A9 are logged).
+name: cora
+channels: 256
+num_anchors: 2
+num_classes: 1
+vfe_channels: 64
+block_channels: [64, 128, 256]
+block_strides: [2, 2, 2]
+block_layers: [3, 5, 5]
+upsample_channels: 128
+score_threshold: 0.2
+
+cit:
+  strategy: winner_take_all      # winner_take_all | topk | maxout
+  topk: 2
+  request_threshold: 0.01
+
+cssm:
+  d_inner: 64
+  d_state: 16
+  scan: cross2d                  # cross2d | raster        (A9)
+  pool: 2                        # scan at H/pool x W/pool; 1 = full res
+  backend: reference             # reference | cuda (mamba-ssm)
+
+lc:
+  gate_hidden: 128
+  conv_layers: 2
+
+pac:
+  pe_dim: 64
+  kernel_size: 3
+  select_hidden: 32
+
+fusion:
+  nms_iou: 0.15
+  recalibration: sigmoid_neg     # sigmoid_neg | one_minus (A4)
+
+teacher_enabled: true
+
+loss:
+  w_local: 1.0
+  w_lc: 1.0
+  w_pac: 1.0
+  lambda_align: 1.0              # A6
+  alpha: 0.25
+  gamma: 2.0
+  reg_weight: 2.0
+  local_scope: all
+  u_reg: 1.0e-4
+
+assumptions:
+  A1_attention: pixel_pair_att_fusion
+  A2_s_coll: winner_confidence
+  A3_pac_fuse: conv_concat
+  A4_recalibration: sigmoid_neg
+  A5_teacher: shared_lc_dense_weighted
+  A6_loss: focal_smoothl1_all_branches
+  A7_pe: sinusoidal_8param
+  A8_yaw: sin_encoding_no_dir_classifier
+  A9_scan: cross2d_reference

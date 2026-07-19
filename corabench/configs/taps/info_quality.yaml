@@ -1,0 +1,15 @@
+# RQ2 information-quality measurement: statistics everywhere + tensor dumps
+# at the key representations (consumable by src/info_quality estimators).
+name: info_quality
+stats:
+  include: null
+dump:
+  include:
+    - encoder/bev_features
+    - cit/collab_feature
+    - lc/output
+    - pac/attention_map
+    - fusion/recalibrated_scores
+  every_n: 10
+  max_dumps: 500
+drift: null                # set to a clean run's tap dir to measure drift
