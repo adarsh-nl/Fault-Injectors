@@ -1,0 +1,20 @@
+# Paper Table I, verbatim, plus the section VI-C rate rule.
+name: table1
+frequency_ghz: 5.9
+bandwidth_mhz: 40
+subchannels_Z: 5
+subchannel_bandwidth_hz: 8.0e6
+tx_power_dbm: 23.0
+noise_power_dbm: -114.0
+path_loss_intercept_db: 128.1     # 128.1 + 36.6 log10(d_km)
+path_loss_slope_db: 36.6
+shadowing_std_db: 8.0
+shadowing_enabled: true
+time_slot_s: 2.5e-4               # tau = 0.25 ms
+rate_threshold_bps: 27.0e6        # below this the link is disabled
+fixed_rate_bps: 27.0e6            # above it, transmission is at this rate
+# B6: null derives the range from Table I at the rate threshold. With the
+# paper's numbers that exceeds the RoI, so every pair interferes and
+# concurrency is bounded by Z rather than by spatial reuse. Set a metre value
+# to study the spatial-reuse regime instead.
+interference_range_m: null

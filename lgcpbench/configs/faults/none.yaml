@@ -1,0 +1,6 @@
+# The clean reference condition. Asserted to produce zero fault records.
+name: none
+pipeline: {}
+agent_scope: non-ego
+seed: 2026
+sweep: []

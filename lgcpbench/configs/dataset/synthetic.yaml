@@ -1,0 +1,18 @@
+# No files on disk: the CPU development and CI path.
+name: synthetic
+adapter: synthetic
+n_frames: 20
+n_agents: 4
+n_objects: 6
+fps: 10.0
+grid:
+  voxel_size: [0.4, 0.4]
+  # Extent must divide evenly by voxel_size * downsample * 4 (the backbone
+  # upsamples every pyramid level back to level 1).
+  point_range: [-38.4, -12.8, -3.0, 38.4, 12.8, 1.0]
+  downsample: 4
+max_points_per_pillar: 32
+max_pillars: 20000
+max_agents: 5
+comm_range_m: 70.0
+categories: null

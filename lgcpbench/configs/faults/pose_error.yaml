@@ -1,0 +1,13 @@
+# Localisation error on the shared poses. Reaches BOTH planes: it misaligns
+# collaborator point clouds (perception) and moves the geometry the RSU
+# schedules against (control).
+name: pose_error
+pipeline:
+  pose_error:
+    sigma_xy: 0.4
+    sigma_heading: 0.4
+agent_scope: non-ego
+seed: 2026
+sweep:
+  - {pose_error: {sigma_xy: [0.2, 0.4, 0.8, 1.6]}}
+  - {pose_error: {sigma_heading: [0.2, 0.4, 0.8, 1.6]}}

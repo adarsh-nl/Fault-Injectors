@@ -1,0 +1,9 @@
+# Packet loss / CAV dropout on the V2X link.
+name: agent_drop
+pipeline:
+  agent_drop:
+    p_drop: 0.25
+agent_scope: non-ego
+seed: 2026
+sweep:
+  - {agent_drop: {p_drop: [0.1, 0.25, 0.5, 0.75]}}

@@ -1,0 +1,16 @@
+# Paper section VI-A. On the UT cluster these live under /deepstore/datasets.
+name: v2xset
+adapter: v2xset
+root: /deepstore/datasets/V2XSet
+split: test
+fps: 10.0
+grid:
+  voxel_size: [0.4, 0.4]
+  # OpenCOOD's cav_lidar_range; 704 x 192 canvas, 176 x 48 feature map.
+  point_range: [-140.8, -38.4, -3.0, 140.8, 38.4, 1.0]
+  downsample: 4
+max_points_per_pillar: 32
+max_pillars: 20000
+max_agents: 5            # OpenCOOD train_params.max_cav
+comm_range_m: 70.0       # OpenCOOD COM_RANGE
+categories: null

@@ -1,0 +1,33 @@
+name: default
+
+roi:
+  # Paper section VI-C: "grid areas of size 10m x 6m".
+  area_size_m: [10.0, 6.0]
+  # B8: gt | prev_global_view | all
+  occupancy_source: gt
+  occupancy_dilate_rings: 0
+
+confidence:
+  pooling: max              # B1
+  delta_g: 0.075            # section VI-D operating point
+  max_group_size: 5         # B3
+
+selection:
+  leader_policy: min_max_load    # min_max_load | first_member (ablation)
+
+rsu:
+  aggregation: union        # B10: union | nms | boundary_nms
+  nms_iou: 0.15
+
+latency:
+  deadline_T_ms: 100.0      # Table I
+  cav_capacity_tflops: 0.1  # Table I
+  edge_capacity_tflops: 2.0 # section VI-C
+  # B7 -- message sizes in bits; t_delta is logged separately so their
+  # contribution to any reported reduction stays auditable.
+  message_bits:
+    D_init: 1024
+    D_info: 512
+    D_ts: 2048
+    D_rep: 8192
+    D_G: 16384

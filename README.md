@@ -2,7 +2,19 @@
 
 A dataset-agnostic fault-injection toolkit for robustness testing of
 multi-modal and multi-agent (V2V / V2X) 3-D perception, plus
-information-quality (mutual information) analysis and visualisation tools.
+information-quality (mutual information) analysis and visualisation tools --
+and two paper benchmarks built on top of it.
+
+| package | what it is |
+|---------|------------|
+| `src/` | the fault-injection toolkit: dataset adapters, injectors, `FaultPipeline` |
+| `cpbench/` | paper-agnostic benchmarking core: taps, logbook, metrics, PointPillars blocks |
+| `corabench/` | **CoRA** ([arXiv:2512.13191](https://arxiv.org/abs/2512.13191), AAAI 2026) |
+| `lgcpbench/` | **LGCP** ([arXiv:2601.12749](https://arxiv.org/abs/2601.12749)) |
+
+Dependency direction is `src/ <- cpbench/ <- {corabench/, lgcpbench/}`, enforced
+statically by `cpbench/tests/test_layering.py`. `src/` stays standalone: the
+toolkit is usable on its own, with or without either benchmark.
 
 Originally built around the Griffin aerial-ground dataset
 (arXiv:2503.06983); now every dataset is normalised through an adapter
@@ -114,7 +126,7 @@ ds = load_dataset('griffin', veh_root='datasets/.../vehicle-side',
 ## Repository structure
 
 ```
-src/
+src/                       the fault-injection toolkit (standalone)
   datasets/                dataset adapters -> one cooperative sample model
     base.py                BaseDataset, CooperativeSample, AgentFrame, Box3D
     griffin.py opv2v.py dair_v2x.py pcd.py
@@ -124,28 +136,50 @@ src/
   pipeline.py              FaultPipeline: compose faults, config-driven sweeps
   info_quality/            mutual-information fusion analysis (see below)
   data_loaders.py transforms.py visualisation.py    Griffin-native utilities
-  tests/                   pytest suite w/ synthetic dataset trees (no data needed)
-corabench/                 CoRA (arXiv:2512.13191, AAAI 2026) benchmarking
-                           framework: full model implementation + trainer +
-                           fault benchmark runners built ON this toolkit --
-                           corruption via FaultPipeline (physical, upstream),
-                           read-only observation taps at every intermediate
-                           tensor (see corabench/README.md)
+
+cpbench/                   paper-agnostic benchmarking core
+  observation/             read-only tensor taps (the measurement plane)
+  faults/                  DataFaultBridge onto src.pipeline (corruption plane)
+  data/                    BEV geometry, pillar voxelisation, anchors, decoding
+  models/                  generic PointPillars encoder + detection heads
+  metrics/ logbook/ utils/ comms/
+
+corabench/                 CoRA: model, fusion blocks, trainer, benchmark runners
+lgcpbench/                 LGCP: area partitioning, grouping, leader election,
+                           transmission scheduling, latency model, plus a THIRD
+                           fault plane that corrupts the RSU's decisions
+                           (see lgcpbench/README.md)
+
 examples/
   opencood_integration.py  fault injection inside OpenCOOD dataloaders
-  collect_bevfusion_features.py
 notebooks/                 visualisation + fault-injection walkthroughs
 docs/
   datasets.md              the sample model + how to add a dataset
+  corabench_design.md      CoRA design doc (two-plane contract)
+  lgcp_design.md           LGCP design doc (three-plane contract, B1-B12)
   information_quality.md coordinate_transformation.md Occlusion.md ...
 ```
+
+## The three fault planes
+
+The toolkit corrupts **data**. The benchmarks add two more surfaces:
+
+1. **Corruption plane** (`src/` + `cpbench/faults/`) -- physical faults on
+   poses, LiDAR, images and the V2X link, applied upstream of any tensor.
+   *No model code corrupts a tensor.*
+2. **Measurement plane** (`cpbench/observation/`) -- read-only taps at every
+   intermediate tensor. *Observation cannot alter the forward pass.*
+3. **Control plane** (`lgcpbench/faults/`) -- LGCP-only: corrupts the RSU's
+   *decisions* (confidence reports, group assignments, leader elections,
+   transmission schedules, the broadcast global view). *Algorithm code is never
+   fault-aware.* These failure modes have no tensor-level equivalent.
 
 Run the tests (no dataset downloads required):
 
 ```bash
 pip install pytest && python -m pytest src/tests src/info_quality/tests -q
-# corabench additionally needs torch + torchvision:
-python -m pytest corabench/tests -q
+# the benchmarks additionally need torch:
+python -m pytest cpbench corabench/tests lgcpbench --doctest-modules -q
 ```
 
 ## Information quality (mutual information)

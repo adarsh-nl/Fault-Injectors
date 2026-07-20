@@ -1,0 +1,17 @@
+# Both planes at once: physical sensor/link degradation AND control-plane
+# decision corruption. The realistic worst case, and the condition that shows
+# whether the two interact or merely add.
+name: combined
+pipeline:
+  pose_error: {sigma_xy: 0.4, sigma_heading: 0.4}
+  agent_drop: {p_drop: 0.25}
+agent_scope: non-ego
+seed: 2026
+control_pipeline:
+  confidence_report: {mode: noise, magnitude: 0.2, p_affected: 0.3}
+  leader_failure: {p_fail: 0.1}
+  schedule_conflict: {p_conflict: 0.1}
+sweep:
+  - {agent_drop: {p_drop: [0.1, 0.25, 0.5]}}
+control_sweep:
+  - {leader_failure: {p_fail: [0.1, 0.25]}}

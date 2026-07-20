@@ -1,0 +1,12 @@
+# All three link degradations at once -- the realistic dense-traffic case.
+name: comm_stress
+pipeline:
+  pose_error: {sigma_xy: 0.4, sigma_heading: 0.4}
+  agent_drop: {p_drop: 0.25}
+  bandwidth: {keep_fraction: 0.5}
+  latency: {mu_delay: 0.1, sigma_jitter: 0.02}
+agent_scope: non-ego
+seed: 2026
+sweep:
+  - {agent_drop: {p_drop: [0.1, 0.25, 0.5]}}
+  - {bandwidth: {keep_fraction: [0.75, 0.5, 0.25]}}

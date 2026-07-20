@@ -1,0 +1,14 @@
+# CPU reference backbone. Not a paper model -- it exists so the control plane
+# is testable without OpenCOOD's Python 3.7 / spconv / CUDA environment.
+# Detection numbers from this backbone are NOT meaningful until it is trained.
+name: native
+backend: native
+channels: 256
+num_anchors: 2
+num_classes: 1
+downsample: 4
+use_projections: true
+score_threshold: 0.2
+nms_iou: 0.15
+# Section VI-C fusion cost, used by the latency model.
+mflops: 1400

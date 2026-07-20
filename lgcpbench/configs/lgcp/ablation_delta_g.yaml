@@ -1,0 +1,22 @@
+# Fig. 3 / Table II: the accuracy-vs-overhead trade-off knob.
+name: ablation_delta_g
+roi:
+  area_size_m: [10.0, 6.0]
+  occupancy_source: gt
+  occupancy_dilate_rings: 0
+confidence:
+  pooling: max
+  delta_g: 0.075
+  max_group_size: 5
+selection:
+  leader_policy: min_max_load
+rsu:
+  aggregation: union
+  nms_iou: 0.15
+latency:
+  deadline_T_ms: 100.0
+  cav_capacity_tflops: 0.1
+  edge_capacity_tflops: 2.0
+  message_bits: {D_init: 1024, D_info: 512, D_ts: 2048, D_rep: 8192, D_G: 16384}
+sweep:
+  - {lgcp.confidence.delta_g: [0.05, 0.075, 0.1, 0.125]}

@@ -1,0 +1,39 @@
+# LGCP-Bench root configuration.
+#
+# Composition follows corabench.utils.config: `defaults` names one file per
+# group, a bare `group=name` override swaps the whole group, and `a.b.c=value`
+# sets a leaf. Nothing here requires editing source.
+#
+#   python -m lgcpbench.scripts.benchmark faults=pose_error lgcp.confidence.delta_g=0.05
+
+defaults:
+  model:   native
+  dataset: synthetic
+  lgcp:    default
+  network: table1
+  faults:  none
+  taps:    none
+
+experiment_name: ${model.name}_${dataset.name}_${faults.name}
+paper: "arXiv:2601.12749v1"
+
+seed: 2026
+deterministic: true
+device: auto
+results_dir: results
+log_predictions: false
+
+# Recorded verbatim into ExperimentMeta so every run carries the ambiguity
+# resolutions it was produced under (design doc section 1.4).
+assumptions:
+  B1: "area pooling operator unspecified in Eq.1; using ${lgcp.confidence.pooling}"
+  B2: "Alg.1 line 3 candidate order unspecified; descending area confidence"
+  B3: "no hard group-size cap in the paper; capped at ${lgcp.confidence.max_group_size}"
+  B4: "t_a/t_f split not formalised; t_f scales linearly in |V_i| per Eq.10"
+  B5: "Alg.2 line 6 tie-break unspecified; highest omega then lowest packet id"
+  B6: "interference range not given; derived from Table I at the rate threshold"
+  B7: "message sizes D_init/D_info/D_ts/D_rep/D_G never given; config-supplied"
+  B8: "occupancy evidence source unspecified; using ${lgcp.roi.occupancy_source}"
+  B9: "leader contributes its own features and transmits nothing for its area"
+  B10: "RSU aggregation unspecified; areas are non-overlapping so ${lgcp.rsu.aggregation}"
+  AUROC: "inapplicable to 3D detection - no countable true-negative set"

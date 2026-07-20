@@ -1,0 +1,14 @@
+# Paper model, via the OpenCOOD adapter (implementation step 12).
+# Requires the separate Python 3.7 environment; see slurm/opencood_env.sbatch.
+name: cobevt
+backend: opencood
+core_method: point_pillar_cobevt
+hypes_yaml: null            # path to opencood/hypes_yaml/point_pillar_cobevt.yaml
+checkpoint: null
+channels: 256
+num_anchors: 2
+num_classes: 1
+downsample: 4
+score_threshold: 0.2        # OpenCOOD VoxelPostprocessor default
+nms_iou: 0.15
+mflops: 2228               # section VI-C
