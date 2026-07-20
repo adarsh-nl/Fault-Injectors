@@ -1,4 +1,4 @@
-"""V2X message accounting (measurement; corruption happens upstream)."""
+"""V2X message byte accounting (paper-agnostic)."""
 
 from .channel import CommLog, MessageChannel
 

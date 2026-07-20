@@ -28,8 +28,8 @@ from typing import List, Optional, Sequence
 import torch
 from torch import nn
 
-from ..comms.channel import MessageChannel
-from ..observation.taps import TapProtocol, emit
+from cpbench.comms.channel import MessageChannel
+from cpbench.observation.taps import TapProtocol, emit
 
 
 @dataclass

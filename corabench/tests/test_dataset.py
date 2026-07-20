@@ -4,7 +4,7 @@ import numpy as np
 import torch
 
 from corabench.data.cooperative import CoRADataset, collate_cooperative
-from corabench.faults.bridge import DataFaultBridge
+from cpbench.faults.bridge import DataFaultBridge
 
 
 def test_item_structure(dataset, grid):

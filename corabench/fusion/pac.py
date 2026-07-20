@@ -27,7 +27,7 @@ import torch
 from torch import nn
 from torchvision.ops import deform_conv2d
 
-from ..observation.taps import TapProtocol, emit
+from cpbench.observation.taps import TapProtocol, emit
 
 
 class BoxPositionalEmbedding(nn.Module):

@@ -18,10 +18,10 @@ from pathlib import Path
 
 from ..training.losses import CoRALoss
 from ..training.trainer import Trainer
-from ..utils.config import load_config
+from cpbench.utils.config import load_config
 from .common import (build_adapters, build_cora_dataset, build_experiment,
                      build_grid, build_model, resolve_device)
-from ..faults.bridge import DataFaultBridge
+from cpbench.faults.bridge import DataFaultBridge
 
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(levelname)s %(name)s: %(message)s")

@@ -21,15 +21,15 @@ from torch.utils.data import ConcatDataset
 from src.datasets import load_dataset
 
 from ..data.cooperative import CoRADataset
-from ..data.preprocessing import AnchorGenerator, GridSpec, TargetAssigner
-from ..data.synthetic import SyntheticCooperativeDataset
-from ..faults.bridge import DataFaultBridge
-from ..logbook.env import capture_environment, seed_everything
-from ..logbook.experiment import ExperimentLogger
-from ..logbook.schema import ExperimentMeta
+from cpbench.data.preprocessing import AnchorGenerator, GridSpec, TargetAssigner
+from cpbench.data.synthetic import SyntheticCooperativeDataset
+from cpbench.faults.bridge import DataFaultBridge
+from cpbench.logbook.env import capture_environment, seed_everything
+from cpbench.logbook.experiment import ExperimentLogger
+from cpbench.logbook.schema import ExperimentMeta
 from ..models.cora import CoRAModel
-from ..observation.recorders import DriftTap, StatsTap, TensorDumpTap
-from ..observation.taps import TapSet
+from cpbench.observation.recorders import DriftTap, StatsTap, TensorDumpTap
+from cpbench.observation.taps import TapSet
 
 logger = logging.getLogger(__name__)
 

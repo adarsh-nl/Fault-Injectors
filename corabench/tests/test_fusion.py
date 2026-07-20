@@ -2,8 +2,8 @@
 
 import torch
 
-from corabench.data.preprocessing import AnchorGenerator
-from corabench.data.postprocessing import BoxDecoder
+from cpbench.data.preprocessing import AnchorGenerator
+from cpbench.data.postprocessing import BoxDecoder
 from corabench.fusion.adaptive import AdaptiveFusion
 from corabench.fusion.cssm import CSSM
 from corabench.fusion.lc import AttentionFusion, GatingUnit, LCModule

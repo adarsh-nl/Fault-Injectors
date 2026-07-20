@@ -37,7 +37,7 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
-from ..observation.taps import TapProtocol, emit
+from cpbench.observation.taps import TapProtocol, emit
 
 logger = logging.getLogger(__name__)
 

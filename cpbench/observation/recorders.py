@@ -53,9 +53,11 @@ class StatsTap:
 
     Example
     -------
+    >>> from cpbench.observation.taps import TapSet, emit
     >>> tap = StatsTap()
     >>> emit(TapSet([tap]), torch.ones(2, 3), module="M", location="lc/gate")
-    >>> tap.records[0].stats["l2"]                    # doctest: +SKIP
+    >>> round(tap.records[0].stats["l2"], 4)
+    2.4495
     """
 
     def __init__(self) -> None:

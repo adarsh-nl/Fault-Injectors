@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from corabench.faults.bridge import DataFaultBridge
+from cpbench.faults.bridge import DataFaultBridge
 
 
 def test_clean_bridge_is_identity(adapter):

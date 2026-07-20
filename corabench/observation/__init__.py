@@ -1,11 +1,10 @@
-"""Read-only observation taps for intermediate tensors (measurement plane)."""
+"""CoRA's observation-location registry.
 
-from .taps import NullTap, TapProtocol, TapRecord, TapSet, emit
+The tap mechanism itself (``emit``, ``TapSet``, ``StatsTap``, ...) is
+paper-agnostic and lives in ``cpbench.observation``. Only the registry of
+CoRA's 52 named locations is here, because each paper names its own.
+"""
+
 from .locations import LOCATIONS, Location, all_locations, validate_location
-from .recorders import DriftTap, StatsTap, TensorDumpTap
 
-__all__ = [
-    "TapProtocol", "TapRecord", "NullTap", "TapSet", "emit",
-    "Location", "LOCATIONS", "all_locations", "validate_location",
-    "StatsTap", "TensorDumpTap", "DriftTap",
-]
+__all__ = ["Location", "LOCATIONS", "all_locations", "validate_location"]

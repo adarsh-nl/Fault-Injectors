@@ -2,8 +2,8 @@
 
 import numpy as np
 
-from corabench.metrics.detection import DetectionEvaluator
-from corabench.metrics.robustness import FramePair, RobustnessMetrics
+from cpbench.metrics.detection import DetectionEvaluator
+from cpbench.metrics.robustness import FramePair, RobustnessMetrics
 
 
 def _box(x, y, yaw=0.0):

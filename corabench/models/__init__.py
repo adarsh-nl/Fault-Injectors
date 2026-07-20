@@ -1,9 +1,9 @@
-"""Model components: encoder, heads, and the CoRA orchestrator."""
+"""CoRA's model.
 
-from .encoder import BEVBackbone, PillarVFE, PointPillarEncoder, PointPillarScatter
-from .heads import ConfidenceHead, DetectionHead
+The generic PointPillars encoder and detection heads are paper-agnostic and
+live in ``cpbench.models``.
+"""
+
 from .cora import CoRAModel
 
-__all__ = ["PillarVFE", "PointPillarScatter", "BEVBackbone",
-           "PointPillarEncoder", "ConfidenceHead", "DetectionHead",
-           "CoRAModel"]
+__all__ = ["CoRAModel"]

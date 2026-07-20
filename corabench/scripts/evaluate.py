@@ -14,9 +14,9 @@ import logging
 from pathlib import Path
 
 from ..evaluation.tester import Tester
-from ..faults.bridge import DataFaultBridge
-from ..logbook.schema import EvalRecord
-from ..utils.config import load_config
+from cpbench.faults.bridge import DataFaultBridge
+from cpbench.logbook.schema import EvalRecord
+from cpbench.utils.config import load_config
 from .common import (build_adapters, build_cora_dataset, build_experiment,
                      build_grid, build_model, build_taps,
                      load_checkpoint_into, resolve_device)

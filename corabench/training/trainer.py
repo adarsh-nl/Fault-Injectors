@@ -20,8 +20,8 @@ import torch
 from torch.utils.data import DataLoader
 
 from ..data.cooperative import collate_cooperative
-from ..logbook.experiment import ExperimentLogger
-from ..logbook.schema import TrainRecord
+from cpbench.logbook.experiment import ExperimentLogger
+from cpbench.logbook.schema import TrainRecord
 from .losses import CoRALoss
 from .validator import Validator, _to_device
 
@@ -161,7 +161,7 @@ class Trainer:
             self.save_checkpoint(epoch, "last")
             if self.validator and (epoch + 1) % self.val_every == 0:
                 last_val = self.validator.run(self.model)
-                from ..logbook.schema import EvalRecord
+                from cpbench.logbook.schema import EvalRecord
                 self.explog.log_eval(EvalRecord(
                     epoch=epoch, dataset=type(self.model).__name__,
                     split="val", condition={"fault": "clean"},

@@ -20,8 +20,8 @@ class SystemProfiler:
 
     Usage
     -----
-    >>> prof = SystemProfiler(device)
-    >>> with prof.measure(n_frames=2):        # around each forward
+    >>> prof = SystemProfiler(device)         # doctest: +SKIP
+    >>> with prof.measure(n_frames=2):        # doctest: +SKIP
     ...     out = model(batch)                # doctest: +SKIP
     >>> prof.summary()                        # doctest: +SKIP
     """

@@ -24,7 +24,7 @@ from typing import Optional, Sequence
 import torch
 from torch import nn
 
-from ..observation.taps import TapProtocol, emit
+from cpbench.observation.taps import TapProtocol, emit
 from .lc import LCModule
 
 

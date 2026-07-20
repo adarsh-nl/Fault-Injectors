@@ -17,12 +17,12 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
-from ..comms.channel import MessageChannel
+from cpbench.comms.channel import MessageChannel
 from ..data.cooperative import collate_cooperative
-from ..logbook.schema import PredictionRecord
-from ..metrics.detection import DetectionEvaluator
-from ..metrics.system import SystemProfiler
-from ..observation.taps import TapProtocol
+from cpbench.logbook.schema import PredictionRecord
+from cpbench.metrics.detection import DetectionEvaluator
+from cpbench.metrics.system import SystemProfiler
+from cpbench.observation.taps import TapProtocol
 from ..training.validator import _to_device
 
 logger = logging.getLogger(__name__)

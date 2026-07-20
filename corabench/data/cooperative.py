@@ -29,8 +29,8 @@ from torch.utils.data import Dataset
 
 from src.datasets.base import BaseDataset, Box3D
 
-from ..faults.bridge import DataFaultBridge
-from .preprocessing import (AnchorGenerator, GridSpec, PillarVoxelizer,
+from cpbench.faults.bridge import DataFaultBridge
+from cpbench.data.preprocessing import (AnchorGenerator, GridSpec, PillarVoxelizer,
                             TargetAssigner)
 
 logger = logging.getLogger(__name__)

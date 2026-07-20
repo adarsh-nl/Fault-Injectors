@@ -10,9 +10,9 @@ import torch
 from corabench.data.cooperative import CoRADataset
 from corabench.evaluation.benchmark import (CleanBenchmarkRunner,
                                             FaultBenchmarkRunner)
-from corabench.faults.bridge import DataFaultBridge
-from corabench.logbook.experiment import ExperimentLogger
-from corabench.logbook.schema import ExperimentMeta
+from cpbench.faults.bridge import DataFaultBridge
+from cpbench.logbook.experiment import ExperimentLogger
+from cpbench.logbook.schema import ExperimentMeta
 from corabench.training.losses import CoRALoss
 from corabench.training.trainer import Trainer
 

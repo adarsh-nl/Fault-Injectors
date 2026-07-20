@@ -4,9 +4,9 @@ import csv
 import json
 from pathlib import Path
 
-from corabench.logbook.experiment import ExperimentLogger
-from corabench.logbook.schema import EvalRecord, ExperimentMeta, TrainRecord
-from corabench.utils.config import load_config
+from cpbench.logbook.experiment import ExperimentLogger
+from cpbench.logbook.schema import EvalRecord, ExperimentMeta, TrainRecord
+from cpbench.utils.config import load_config
 
 CONFIG_ROOT = Path(__file__).resolve().parents[1] / "configs" / "config.yaml"
 

@@ -49,8 +49,8 @@ class DetectionEvaluator:
 
     Usage
     -----
-    >>> ev = DetectionEvaluator(iou_thresholds=(0.5, 0.7))
-    >>> ev.add_frame(boxes, scores, gt_boxes)      # once per frame
+    >>> ev = DetectionEvaluator(iou_thresholds=(0.5, 0.7))  # doctest: +SKIP
+    >>> ev.add_frame(boxes, scores, gt_boxes)      # doctest: +SKIP
     >>> ev.compute()["ap70"]                       # doctest: +SKIP
 
     add_frame also returns the matched-gt array at the *first* IoU

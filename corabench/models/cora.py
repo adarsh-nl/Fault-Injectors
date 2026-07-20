@@ -27,18 +27,18 @@ import numpy as np
 import torch
 from torch import nn
 
-from ..comms.channel import MessageChannel
-from ..data.postprocessing import BoxDecoder
-from ..data.preprocessing import AnchorGenerator, GridSpec
+from cpbench.comms.channel import MessageChannel
+from cpbench.data.postprocessing import BoxDecoder
+from cpbench.data.preprocessing import AnchorGenerator, GridSpec
 from ..fusion.adaptive import AdaptiveFusion
 from ..fusion.cit import CITModule
 from ..fusion.cssm import CSSM
 from ..fusion.lc import LCModule
 from ..fusion.pac import PACModule
 from ..fusion.teacher import TeacherBranch
-from ..observation.taps import TapProtocol
-from .encoder import PointPillarEncoder
-from .heads import ConfidenceHead, DetectionHead
+from cpbench.observation.taps import TapProtocol
+from cpbench.models.encoder import PointPillarEncoder
+from cpbench.models.heads import ConfidenceHead, DetectionHead
 
 
 class CoRAModel(nn.Module):

@@ -2,7 +2,7 @@
 
 import torch
 
-from corabench.models.encoder import (BEVBackbone, PillarVFE,
+from cpbench.models.encoder import (BEVBackbone, PillarVFE,
                                       PointPillarEncoder, PointPillarScatter)
 
 

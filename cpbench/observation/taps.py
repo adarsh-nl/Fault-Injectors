@@ -19,9 +19,11 @@ Contract
     * With ``taps=None`` the hooks cost one ``is None`` check.
 
 Example
-    >>> stats = StatsTap()                            # doctest: +SKIP
+    >>> import torch
+    >>> from cpbench.observation.recorders import StatsTap
+    >>> stats = StatsTap()
     >>> taps = TapSet([stats])
-    >>> out = model(batch, taps=taps)                 # forward unchanged
+    >>> emit(taps, torch.ones(2, 3), module="M", location="encoder/bev_features")
     >>> stats.records[0].location
     'encoder/bev_features'
 """
@@ -120,7 +122,10 @@ class TapSet:
 
     Example
     -------
+    >>> from cpbench.observation.recorders import StatsTap
     >>> ts = TapSet([StatsTap()], include=["lc/*", "pac/attention_map"])
+    >>> ts.wants("lc/gate"), ts.wants("encoder/bev_features")
+    (True, False)
     """
 
     def __init__(self, taps: Sequence[TapProtocol],

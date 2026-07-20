@@ -7,9 +7,9 @@ import pytest
 import torch
 
 from corabench.data.cooperative import CoRADataset, collate_cooperative
-from corabench.data.preprocessing import (AnchorGenerator, GridSpec,
+from cpbench.data.preprocessing import (AnchorGenerator, GridSpec,
                                           PillarVoxelizer, TargetAssigner)
-from corabench.data.synthetic import SyntheticCooperativeDataset
+from cpbench.data.synthetic import SyntheticCooperativeDataset
 from corabench.models.cora import CoRAModel
 
 

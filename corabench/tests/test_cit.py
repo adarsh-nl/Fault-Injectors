@@ -2,7 +2,7 @@
 
 import torch
 
-from corabench.comms.channel import MessageChannel
+from cpbench.comms.channel import MessageChannel
 from corabench.fusion.cit import CITModule
 
 

@@ -25,9 +25,9 @@ import numpy as np
 import torch
 from torch import nn
 
-from ..data.postprocessing import BoxDecoder
-from ..observation.taps import TapProtocol, emit
-from ..utils.geometry import nms_bev
+from cpbench.data.postprocessing import BoxDecoder
+from cpbench.observation.taps import TapProtocol, emit
+from cpbench.utils.geometry import nms_bev
 
 
 class AdaptiveFusion(nn.Module):

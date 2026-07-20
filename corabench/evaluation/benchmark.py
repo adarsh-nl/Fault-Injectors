@@ -25,11 +25,11 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 import torch
 
-from ..faults.bridge import DataFaultBridge
-from ..logbook.experiment import ExperimentLogger
-from ..logbook.schema import EvalRecord
-from ..metrics.robustness import FramePair, RobustnessMetrics
-from ..observation.taps import TapProtocol
+from cpbench.faults.bridge import DataFaultBridge
+from cpbench.logbook.experiment import ExperimentLogger
+from cpbench.logbook.schema import EvalRecord
+from cpbench.metrics.robustness import FramePair, RobustnessMetrics
+from cpbench.observation.taps import TapProtocol
 from .sweeps import expand_sweep
 from .tester import Tester, TestResult
 

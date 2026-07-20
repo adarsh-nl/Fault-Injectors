@@ -13,7 +13,7 @@ import torch
 from torch.utils.data import DataLoader
 
 from ..data.cooperative import collate_cooperative
-from ..metrics.detection import DetectionEvaluator
+from cpbench.metrics.detection import DetectionEvaluator
 
 logger = logging.getLogger(__name__)
 
