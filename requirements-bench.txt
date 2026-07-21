@@ -1,0 +1,23 @@
+# Extra dependencies for the benchmark packages (cpbench, corabench,
+# lgcpbench, cobevtbench). The core repo's requirements.txt provides numpy,
+# matplotlib, pyyaml and tqdm; these are what the models additionally need.
+#
+#   pip install -r requirements-bench.txt
+#
+# PyTorch wheels are platform-specific. The line below installs the default
+# (CPU/CUDA-autodetected) build from PyPI. For a specific CUDA build, follow
+# https://pytorch.org/get-started/locally/ -- and note that the HPC sbatch
+# scripts pin a CUDA module, so match it there.
+torch
+torchvision
+
+# einops: required by cobevtbench/attention. CoBEVT's FAX partitioning is
+# defined by rearrange patterns in which local and global attention differ by
+# a single character -- '(x w1)' versus '(w1 x)'. Written as raw torch
+# reshape/permute chains that distinction becomes two near-identical blocks of
+# index arithmetic, which is exactly the kind of code that hides a bug.
+einops
+
+# tensorboard is optional: cpbench.logbook.ExperimentLogger degrades to
+# CSV + JSON + console with a logged note if it is absent.
+tensorboard

@@ -1,0 +1,21 @@
+# Stale collaborator data.
+#
+# mu_delay is in SECONDS; CommLatencyInjector converts to whole frames using
+# the dataset fps, so a delay below one frame period injects nothing. At
+# 10 Hz the first effective step is 0.1 s -- a sweep starting below that
+# would report a fault condition that provably did nothing.
+#
+# Held at a fixed moderate pose error, because latency and pose error
+# compound in reality and measuring latency alone overstates robustness.
+# Each sweep entry is a complete fault-bridge config.
+name: latency
+pipeline:
+  latency: {mu_delay: 0.2, sigma_jitter: 0.02}
+  pose_error: {sigma_xy: 0.4, sigma_heading: 0.4}
+agent_scope: non-ego
+sweep:
+  - {pipeline: {pose_error: {sigma_xy: 0.4, sigma_heading: 0.4}}}
+  - {pipeline: {latency: {mu_delay: 0.1}, pose_error: {sigma_xy: 0.4, sigma_heading: 0.4}}}
+  - {pipeline: {latency: {mu_delay: 0.2}, pose_error: {sigma_xy: 0.4, sigma_heading: 0.4}}}
+  - {pipeline: {latency: {mu_delay: 0.3}, pose_error: {sigma_xy: 0.4, sigma_heading: 0.4}}}
+  - {pipeline: {latency: {mu_delay: 0.4}, pose_error: {sigma_xy: 0.4, sigma_heading: 0.4}}}

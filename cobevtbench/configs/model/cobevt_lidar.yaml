@@ -1,0 +1,36 @@
+# LiDAR track: PointPillars encoder + FuseBEVT + detection head (paper
+# Table 2, AP@0.7 85.2). A10: no LiDAR model exists in the released repo, so
+# this is a reconstruction from Appendix C.3 plus OpenCOOD convention. The
+# fusion block is the SAME FuseBEVT the camera track uses -- that is Table 2's
+# actual claim.
+name: cobevt_lidar
+track: lidar
+
+encoder:
+  out_channels: 256
+
+fusebevt:
+  dim: null                # null -> encoder out_channels (no unstated projection)
+  depth: 3
+  window: 8
+  dim_head: 32
+  mlp_dim: null            # null -> 2 * dim
+  dropout: 0.1
+  use_local: true
+  use_global: true
+  pool: mean               # A11
+
+head:
+  num_anchors: 2
+  num_classes: 1
+
+loss:
+  alpha: 0.25
+  gamma: 2.0
+  reg_weight: 2.0
+
+score_threshold: 0.2
+
+assumptions:
+  A10: "LiDAR track reconstructed from paper Appendix C.3 + OpenCOOD convention; no released model to port"
+  A11: "agent axis pooled by ${model.fusebevt.pool}"

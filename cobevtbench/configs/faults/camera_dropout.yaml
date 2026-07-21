@@ -1,0 +1,19 @@
+# Paper section 7.4, reproduced as a fault condition.
+#
+# The authors blind all four ego cameras and report CoBEVT still reaches
+# 44.3 IoU, because collaborators cover the ego's blind scene. This is the
+# one benchmark condition with a published number to hit, which makes it the
+# strongest available check that the corruption plane is wired correctly.
+#
+# The sweep walks 0 -> 4 dropped ego cameras; IoU must fall monotonically,
+# and the final point should land near 44.3 for a trained model.
+name: camera_dropout
+pipeline: {}
+camera_dropout: {agents: ego, n_drop: 4, fill: zero}
+agent_scope: all
+sweep:
+  - {}
+  - {camera_dropout: {agents: ego, n_drop: 1, fill: zero}}
+  - {camera_dropout: {agents: ego, n_drop: 2, fill: zero}}
+  - {camera_dropout: {agents: ego, n_drop: 3, fill: zero}}
+  - {camera_dropout: {agents: ego, n_drop: 4, fill: zero}}

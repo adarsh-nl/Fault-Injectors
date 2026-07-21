@@ -1,0 +1,16 @@
+# In-memory cooperative camera scenes: smoke tests, CI, demos, no downloads.
+# Geometrically consistent (real projection), so the lifting is learnable.
+name: synthetic_camera
+adapter: synthetic_camera
+track: camera
+root: null
+n_frames: 16
+n_agents: 3
+n_objects: 4
+n_cameras: 4
+image_size: [64, 64]
+fov_degrees: 90.0
+fps: 10.0
+max_cav: 3
+bev: {height: 128, width: 128, h_meters: 40.0, w_meters: 40.0, offset: 0.0}
+categories: [car]

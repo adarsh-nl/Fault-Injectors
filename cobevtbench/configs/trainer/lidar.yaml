@@ -1,0 +1,16 @@
+# LiDAR-track schedule (paper Appendix C.3): Adam, multistep x0.1 every 10 ep,
+# lr starting at 1e-3.
+name: lidar
+epochs: 40
+batch_size: 2
+optimizer: adam
+lr: 1.0e-3
+weight_decay: 1.0e-4
+scheduler: multistep
+lr_steps: [10, 20, 30]
+lr_gamma: 0.1
+grad_clip: 35.0
+amp: true
+num_workers: 4
+log_every: 20
+eval_every: 2

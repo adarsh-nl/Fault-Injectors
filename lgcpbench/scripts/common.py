@@ -397,7 +397,8 @@ def build_logger(cfg: Dict[str, Any], suffix: str = "") -> ExperimentLogger:
         resolved_config=cfg,
     )
     return ExperimentLogger(cfg["results_dir"], name, meta,
-                            log_predictions=bool(cfg.get("log_predictions", False)))
+                            log_predictions=bool(cfg.get("log_predictions", False)),
+                            logger_names=("lgcpbench",))
 
 
 def apply_seed(cfg: Dict[str, Any]) -> None:

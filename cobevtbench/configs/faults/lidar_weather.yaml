@@ -1,0 +1,13 @@
+# LiDAR-track sensor degradation. Optional MultiCorrupt backends, as weather.
+name: lidar_weather
+pipeline: {}
+lidar_faults:
+  - {kind: points_reduction, severity: 2}
+agent_scope: all
+sweep:
+  - {}
+  - {lidar_faults: [{kind: points_reduction, severity: 1}]}
+  - {lidar_faults: [{kind: points_reduction, severity: 3}]}
+  - {lidar_faults: [{kind: beam_reduction, severity: 2}]}
+  - {lidar_faults: [{kind: fog, severity: 2}]}
+  - {lidar_faults: [{kind: snow, severity: 2}]}

@@ -149,6 +149,12 @@ lgcpbench/                 LGCP: area partitioning, grouping, leader election,
                            transmission scheduling, latency model, plus a THIRD
                            fault plane that corrupts the RSU's decisions
                            (see lgcpbench/README.md)
+cobevtbench/               CoBEVT: sparse fused-axial attention (FAX), camera
+                           BEV segmentation (SinBEVT + FuseBEVT) and the LiDAR
+                           detection track. The first package here whose
+                           primary fault surface is the IMAGE -- camera
+                           dropout, lens occlusion, weather, miscalibration
+                           (see cobevtbench/README.md)
 
 examples/
   opencood_integration.py  fault injection inside OpenCOOD dataloaders
@@ -157,6 +163,7 @@ docs/
   datasets.md              the sample model + how to add a dataset
   corabench_design.md      CoRA design doc (two-plane contract)
   lgcp_design.md           LGCP design doc (three-plane contract, B1-B12)
+  cobevt_design.md         CoBEVT design doc (FAX injection map, A1-A10)
   information_quality.md coordinate_transformation.md Occlusion.md ...
 ```
 
@@ -178,8 +185,9 @@ Run the tests (no dataset downloads required):
 
 ```bash
 pip install pytest && python -m pytest src/tests src/info_quality/tests -q
-# the benchmarks additionally need torch:
-python -m pytest cpbench corabench/tests lgcpbench --doctest-modules -q
+# the benchmarks additionally need torch and einops:
+pip install -r requirements-bench.txt
+python -m pytest cpbench corabench/tests lgcpbench cobevtbench --doctest-modules -q
 ```
 
 ## Information quality (mutual information)

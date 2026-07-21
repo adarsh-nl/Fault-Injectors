@@ -1,0 +1,24 @@
+# Collaborators disappearing from the V2X link.
+#
+# Sweeps both pooling modes deliberately (assumption A11). FuseBEVT's default
+# collapses the agent axis with an unweighted mean over all max_cav slots,
+# so an absent agent's zero-padded slot still contributes an attended output
+# to the fused feature. `pool: masked_mean` divides by the present-agent
+# count instead, making the output provably independent of absent slots.
+#
+# Running both separates "lost information" from "changed padding
+# contribution" -- with only the default, the two are reported as one number.
+# Each sweep entry is a complete fault-bridge config.
+name: agent_drop
+pipeline:
+  agent_drop: {p_drop: 0.25}
+agent_scope: non-ego
+model_overrides:
+  - {}                              # faithful: pool = mean
+  - {model.pool: masked_mean}
+sweep:
+  - {}
+  - {pipeline: {agent_drop: {p_drop: 0.15}}}
+  - {pipeline: {agent_drop: {p_drop: 0.25}}}
+  - {pipeline: {agent_drop: {p_drop: 0.50}}}
+  - {pipeline: {agent_drop: {p_drop: 0.75}}}

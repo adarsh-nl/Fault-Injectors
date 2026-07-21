@@ -1,0 +1,20 @@
+# Adverse weather and lighting on the camera track.
+#
+# These wrap MultiCorrupt backends and are OPTIONAL dependencies: the
+# injectors raise a clear ImportError on construction when the backend is
+# missing, so a machine without it fails loudly at build time rather than
+# producing a silently clean "weather" run.
+#
+# severity is 1, 2 or 3 (MultiCorrupt's scale).
+name: weather
+pipeline: {}
+image_faults:
+  - {kind: fog, severity: 2}
+agent_scope: all
+sweep:
+  - {}
+  - {image_faults: [{kind: fog, severity: 1}]}
+  - {image_faults: [{kind: fog, severity: 3}]}
+  - {image_faults: [{kind: snow, severity: 2}]}
+  - {image_faults: [{kind: darkness, severity: 2}]}
+  - {image_faults: [{kind: brightness, severity: 2}]}

@@ -1,0 +1,14 @@
+# The feature maps the information-quality analysis (src/info_quality) reads,
+# plus a drift comparison against a clean reference run's dump. Set `drift`
+# to a clean run's taps/ directory to measure per-location drift under fault.
+name: info_quality
+stats:
+  include: null
+dump:
+  include:
+    - sinbevt/output
+    - fusebevt/output
+    - head/seg_softmax
+  every_n: 10
+  max_dumps: 500
+drift: null

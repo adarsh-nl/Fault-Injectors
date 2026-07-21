@@ -1,0 +1,60 @@
+# Section 7.3 ablation (neither): FuseBEVT with use_local=false, use_global=false. Values from the released
+# opv2v/opencood/hypes_yaml/opcamera/corpbevt.yaml unless a note says
+# otherwise. Assumptions A1-A11 are documented at the bottom and interpolated
+# into meta.json, so a results bundle records which reading it was produced under.
+name: ablation_neither
+track: camera
+target: dynamic            # background, vehicle -> output_class 2
+
+backbone:
+  arch: resnet34
+  pretrained: true
+  id_pick: [1, 2, 3]       # A2: ResNet layer2/3/4 (128/256/512 ch), not the paper's layer names
+
+sinbevt:
+  dims: [128, 128, 128]
+  middle: [2, 2, 2]
+  heads: [4, 4, 4]         # A9: derived as dim // dim_head, asserted at build
+  dim_head: [32, 32, 32]
+  bev_size: 128            # halves per block -> 128, 64, 32
+  bev_meters: 100.0
+  q_win_sizes: [16, 16, 32]
+  feat_win_sizes: [8, 8, 16]
+  bev_embedding_flags: [true, false, false]
+  self_attn_dim_head: 32
+  camera_reduce: mean      # A6
+  no_image_features: false
+
+compression: 0             # 0 | 8 | 16 | 32 | 64 (the compression ablation)
+
+fusebevt:
+  depth: 3
+  window: 8
+  dim_head: 32             # 128/32 = 4 heads
+  mlp_dim: 256
+  dropout: 0.1
+  use_local: false
+  use_global: false
+  pool: mean               # A11: 'mean' faithful, 'masked_mean' isolates info loss
+
+decoder:
+  channels: [32, 64, 128]
+  upsample_mode: nearest   # A4: released code uses nearest, paper says bilinear
+
+head:
+  kernel_size: 3           # A3: released code is 3x3, paper says 1x1
+
+loss:
+  d_weights: 75.0
+  coefficient: 2.0
+
+assumptions:
+  A1: "epochs/optimizer follow the released config (${trainer.epochs} ep, AdamW), not the paper's 60/Adam"
+  A2: "ResNet taps are layer2/3/4 via id_pick=${model.backbone.id_pick}; the paper's layer names are off by one"
+  A3: "seg head is Conv${model.head.kernel_size}x${model.head.kernel_size}, per the code, not the paper's 1x1"
+  A4: "decoder upsampling is ${model.decoder.upsample_mode}, per the code, not the paper's bilinear"
+  A5: "SinBEVT cross-attention has no relative position bias (released rel_pos_emb: false)"
+  A6: "camera axis reduced by ${model.sinbevt.camera_reduce} after projection"
+  A7: "exactly one segmentation head is built; the reference allocates an unused second head"
+  A9: "attention heads derived as dim // dim_head"
+  A11: "agent axis pooled by ${model.fusebevt.pool}; sweep masked_mean to isolate information loss from padding contribution"

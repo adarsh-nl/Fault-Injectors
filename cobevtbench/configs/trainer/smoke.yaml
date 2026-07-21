@@ -1,0 +1,15 @@
+# Fast path for CI and local sanity: a couple of epochs, a few batches.
+name: smoke
+epochs: 2
+batch_size: 2
+optimizer: adamw
+lr: 2.0e-3
+weight_decay: 1.0e-2
+scheduler: none
+warmup_epochs: 0
+grad_clip: 35.0
+amp: false
+num_workers: 0
+log_every: 1
+eval_every: 1
+max_batches: 4

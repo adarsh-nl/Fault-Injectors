@@ -151,7 +151,8 @@ def build_experiment(cfg: Dict[str, Any], suffix: str = "") -> ExperimentLogger:
         resolved_config=cfg,
         started_at=stamp)
     return ExperimentLogger(cfg.get("results_dir", "results"), name, meta,
-                            log_predictions=bool(cfg.get("log_predictions")))
+                            log_predictions=bool(cfg.get("log_predictions")),
+                            logger_names=("corabench",))
 
 
 def load_checkpoint_into(model: CoRAModel, path: str,

@@ -1,0 +1,18 @@
+# In-memory cooperative LiDAR scenes for the detection track.
+name: synthetic_lidar
+adapter: synthetic
+track: lidar
+root: null
+n_frames: 16
+n_agents: 3
+n_objects: 4
+fps: 10.0
+max_cav: 3
+# 64x64 pillars (divisible by the stride product 8), 32x32 features.
+grid:
+  voxel_size: [0.8, 0.8]
+  point_range: [-25.6, -25.6, -3.0, 25.6, 25.6, 1.0]
+  downsample: 2
+max_points_per_pillar: 16
+max_pillars: 4000
+categories: [car]

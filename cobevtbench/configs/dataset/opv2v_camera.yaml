@@ -1,0 +1,15 @@
+# OPV2V camera track (Xu et al.). Paths are read-only on the UT HPC deepstore;
+# override dataset.root on other machines.
+name: opv2v_camera
+adapter: opv2v
+track: camera
+root: /deepstore/datasets/course/adas/opv2v
+split: {train: train, val: validate, test: test}
+fps: 10.0
+n_cameras: 4
+image_size: [512, 512]
+max_cav: 5
+# 100 m x 100 m at 0.39 m/px -> the 256x256 evaluation grid.
+bev: {height: 256, width: 256, h_meters: 100.0, w_meters: 100.0, offset: 0.0}
+cav_lidar_range: [-50.0, -50.0, -3.0, 50.0, 50.0, 1.0]
+categories: [car]

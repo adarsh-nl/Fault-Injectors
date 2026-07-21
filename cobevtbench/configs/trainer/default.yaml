@@ -1,0 +1,19 @@
+# Camera-track schedule from the released config (A1): AdamW, cosine anneal
+# with warmup. The paper text says 60 epochs / Adam; trainer/paper.yaml
+# offers that reading. 151 is what produced the released weights.
+name: default
+epochs: 151
+batch_size: 1
+optimizer: adamw
+lr: 2.0e-4
+weight_decay: 1.0e-2
+eps: 1.0e-10
+scheduler: cosine_warm
+warmup_epochs: 10
+warmup_lr: 2.0e-5
+lr_min: 5.0e-6
+grad_clip: 35.0
+amp: true
+num_workers: 4
+log_every: 20
+eval_every: 5

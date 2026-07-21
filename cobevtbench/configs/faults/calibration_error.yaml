@@ -1,0 +1,28 @@
+# Camera miscalibration -- the fault surface specific to how CoBEVT works.
+#
+# SinBEVT lifts image features to BEV by matching unit ray directions
+# computed from K and T_cam_to_agent, with no depth estimation. Those
+# matrices are therefore on the attention path, and perturbing them moves
+# where each camera's content lands on the BEV grid.
+#
+# Magnitudes are physically motivated: thermal drift moves focal length by a
+# few pixels, a minor knock moves mounting pose by millimetres to
+# centimetres and a fraction of a degree.
+name: calibration_error
+pipeline: {}
+calibration:
+  sigma_focal_px: 4.0
+  sigma_principal_px: 2.0
+  sigma_translation_m: 0.02
+  sigma_rotation_deg: 0.5
+  agents: all
+  cameras: all
+agent_scope: all
+sweep:
+  - {}
+  - {calibration: {sigma_focal_px: 2.0, sigma_rotation_deg: 0.25, agents: all}}
+  - {calibration: {sigma_focal_px: 4.0, sigma_rotation_deg: 0.5, agents: all}}
+  - {calibration: {sigma_focal_px: 8.0, sigma_rotation_deg: 1.0, agents: all}}
+  - {calibration: {sigma_focal_px: 16.0, sigma_rotation_deg: 2.0, agents: all}}
+  # One badly mounted camera on one vehicle -- the realistic single-fault case.
+  - {calibration: {sigma_rotation_deg: 2.0, agents: non-ego, cameras: one}}

@@ -1,0 +1,6 @@
+# Per-tensor summary statistics for every observation point, written to
+# taps.csv. Cheap enough to leave on for a whole benchmark run: one detach
+# and a handful of reductions per emit site, no tensor kept.
+name: stats
+stats:
+  include: null            # null = every registered location

@@ -1,0 +1,20 @@
+# Lens contamination: dirt, scratches, impact cracks.
+#
+# The most common real camera fault and the one least likely to trigger an
+# alarm -- the sensor keeps reporting, it just reports less. severity is the
+# occluded fraction under severity_mode: coverage.
+#
+# `pattern` selects dirt / scratch / crack. It is not spelled `kind` because
+# that name is already the registry's injector-family discriminator.
+name: occlusion
+pipeline: {}
+image_faults:
+  - {kind: occlusion, severity: 0.3, severity_mode: coverage, temporal: persistent}
+agent_scope: all
+sweep:
+  - {}
+  - {image_faults: [{kind: occlusion, severity: 0.1, severity_mode: coverage, temporal: persistent}]}
+  - {image_faults: [{kind: occlusion, severity: 0.3, severity_mode: coverage, temporal: persistent}]}
+  - {image_faults: [{kind: occlusion, severity: 0.5, severity_mode: coverage, temporal: persistent}]}
+  - {image_faults: [{kind: occlusion, pattern: crack, severity: 0.3, severity_mode: coverage}]}
+  - {image_faults: [{kind: occlusion, pattern: scratch, severity: 0.3, severity_mode: coverage}]}

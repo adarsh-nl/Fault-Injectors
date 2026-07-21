@@ -1,0 +1,16 @@
+# Root configuration. Groups are composed from configs/<group>/<name>.yaml;
+# swap a group with `group=name` on the CLI, set a leaf with `a.b.c=value`.
+defaults:
+  model: cobevt_camera_dynamic
+  dataset: synthetic_camera
+  faults: none
+  taps: none
+  trainer: default
+
+experiment_name: ${model.name}_${dataset.name}_${faults.name}
+paper: "CoBEVT (arXiv:2207.02202, CoRL 2022)"
+seed: 2022
+deterministic: true
+results_dir: results
+log_predictions: false
+device: auto            # auto | cuda | cpu

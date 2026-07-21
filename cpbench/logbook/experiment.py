@@ -30,11 +30,12 @@ import csv
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 import yaml
 
-from .schema import EvalRecord, ExperimentMeta, PredictionRecord, TrainRecord
+from .schema import (EvalRecord, ExperimentMeta, PredictionRecord,
+                     SegPredictionRecord, TrainRecord)
 
 logger = logging.getLogger(__name__)
 
@@ -86,10 +87,21 @@ class ExperimentLogger:
     meta      ExperimentMeta written to meta.json (and config.yaml from
               ``meta.resolved_config``).
     log_predictions  write predictions.jsonl (large; default False).
+    logger_names     top-level logger names to mirror into ``training.log``,
+                     in addition to ``cpbench``. A paper package MUST pass its
+                     own name, because python logging attaches handlers by
+                     logger name and a name that matches nothing fails
+                     silently: the console still shows everything, and
+                     ``training.log`` is simply written empty. That is the
+                     worst kind of logging bug -- it looks fine until you go
+                     to read a finished cluster run. This argument used to be
+                     hardcoded to ``"corabench"``, which is exactly how
+                     lgcpbench ended up with empty logs.
     """
 
     def __init__(self, root: "str | Path", name: str, meta: ExperimentMeta,
-                 log_predictions: bool = False) -> None:
+                 log_predictions: bool = False,
+                 logger_names: Sequence[str] = ()) -> None:
         self.dir = Path(root) / name
         self.dir.mkdir(parents=True, exist_ok=True)
         (self.dir / "checkpoints").mkdir(exist_ok=True)
@@ -108,8 +120,14 @@ class ExperimentLogger:
         self._file_handler = logging.FileHandler(self.dir / "training.log")
         self._file_handler.setFormatter(logging.Formatter(
             "%(asctime)s %(levelname)s %(name)s: %(message)s"))
-        logging.getLogger("corabench").addHandler(self._file_handler)
-        logging.getLogger("corabench").setLevel(logging.INFO)
+        # dict.fromkeys de-duplicates while preserving order, so passing
+        # "cpbench" explicitly is harmless.
+        self._logger_names: Tuple[str, ...] = tuple(
+            dict.fromkeys(("cpbench",) + tuple(logger_names)))
+        for logger_name in self._logger_names:
+            attached = logging.getLogger(logger_name)
+            attached.addHandler(self._file_handler)
+            attached.setLevel(logging.INFO)
 
         self.tb = SummaryWriter(str(self.dir / "tensorboard")) if _HAS_TB else None
         if not _HAS_TB:
@@ -154,7 +172,9 @@ class ExperimentLogger:
         for rec in records:
             self._taps.add(rec.as_row())
 
-    def log_prediction(self, rec: PredictionRecord) -> None:
+    def log_prediction(self, rec: "PredictionRecord | SegPredictionRecord") -> None:
+        """Append one per-frame prediction record. Detection and segmentation
+        records share the sink; both are dispatched on ``as_dict()`` alone."""
         if not self.log_predictions_enabled:
             return
         if self._pred_fh is None:
@@ -189,7 +209,8 @@ class ExperimentLogger:
             self._pred_fh.close()
         if self.tb:
             self.tb.close()
-        logging.getLogger("corabench").removeHandler(self._file_handler)
+        for logger_name in self._logger_names:
+            logging.getLogger(logger_name).removeHandler(self._file_handler)
         self._file_handler.close()
         logger.info("experiment closed: %s", self.dir)
 

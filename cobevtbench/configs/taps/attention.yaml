@@ -1,0 +1,20 @@
+# Dump the fusion attention distributions to disk for offline analysis.
+#
+# This is how "did attention down-weight the corrupted collaborator?" gets
+# answered: the softmax over (agent, position) is the tensor that holds the
+# answer, and the reference implementation cannot reach it at all.
+#
+# every_n and max_dumps are MANDATORY here, not optional tuning. One softmax
+# at CoBEVT's settings is (B*16, 4, 320, 320) ~ 26 MB; dumping every one of a
+# benchmark run would fill the disk in minutes.
+name: attention
+stats:
+  include: null
+dump:
+  include:
+    - fusebevt/d0/local/softmax
+    - fusebevt/d0/global/softmax
+    - fusebevt/d0/local/rel_pos_bias
+    - fusebevt/roi_mask
+  every_n: 50
+  max_dumps: 200

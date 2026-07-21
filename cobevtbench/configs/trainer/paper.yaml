@@ -1,0 +1,17 @@
+# The paper's stated text values (A1): 60 epochs, Adam, cosine annealing.
+# Provided so the config-vs-paper difference is one CLI flag, not a source edit.
+name: paper
+epochs: 60
+batch_size: 1
+optimizer: adam
+lr: 2.0e-4
+weight_decay: 0.0
+eps: 1.0e-8
+scheduler: cosine
+warmup_epochs: 0
+lr_min: 1.0e-6
+grad_clip: 35.0
+amp: true
+num_workers: 4
+log_every: 20
+eval_every: 5

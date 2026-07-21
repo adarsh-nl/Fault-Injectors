@@ -1,0 +1,2 @@
+# No observation. The forward pass costs one `is None` check per emit site.
+name: none

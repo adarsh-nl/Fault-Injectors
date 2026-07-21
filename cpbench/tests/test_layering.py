@@ -1,7 +1,7 @@
 """
 Enforce the repository's dependency direction.
 
-    src/  <-  cpbench/  <-  {corabench/, lgcpbench/}
+    src/  <-  cpbench/  <-  {corabench/, lgcpbench/, cobevtbench/}
 
 This is the rule the extraction exists to make true, and it is exactly the
 kind of thing that decays silently: one convenient import from a paper package
@@ -15,11 +15,12 @@ that introduces it.
 from __future__ import annotations
 
 import ast
+import itertools
 import pathlib
 from typing import Iterator, Set, Tuple
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
-PAPER_PACKAGES = ("corabench", "lgcpbench")
+PAPER_PACKAGES = ("corabench", "lgcpbench", "cobevtbench")
 
 
 def _imports(path: pathlib.Path) -> Iterator[str]:
@@ -66,10 +67,20 @@ def test_cpbench_does_not_import_any_paper_package() -> None:
 
 
 def test_paper_packages_do_not_import_each_other() -> None:
-    """corabench and lgcpbench are siblings. Anything they both need belongs
-    in cpbench instead."""
-    assert not _offenders("corabench", ("lgcpbench",), include_tests=True)
-    assert not _offenders("lgcpbench", ("corabench",), include_tests=True)
+    """The paper packages are siblings. Anything two of them need belongs in
+    cpbench instead.
+
+    Written over every ordered pair rather than as a hand-written list, so
+    adding a fourth paper to PAPER_PACKAGES is one edit and cannot leave a
+    direction unchecked. The pairwise form is what caught nothing yet and is
+    meant to keep catching nothing.
+    """
+    offenders: Set[str] = set()
+    for package, sibling in itertools.permutations(PAPER_PACKAGES, 2):
+        offenders |= _offenders(package, (sibling,), include_tests=True)
+    assert not offenders, "paper packages must not import each other:\n  " + "\n  ".join(
+        sorted(offenders)
+    )
 
 
 def test_src_does_not_import_upward() -> None:
@@ -116,5 +127,9 @@ def test_every_package_is_importable() -> None:
         "lgcpbench.selection", "lgcpbench.network", "lgcpbench.perception",
         "lgcpbench.orchestration", "lgcpbench.metrics", "lgcpbench.data",
         "lgcpbench.observation",
+        "cobevtbench", "cobevtbench.observation", "cobevtbench.attention",
+        "cobevtbench.fusion", "cobevtbench.models", "cobevtbench.data",
+        "cobevtbench.faults", "cobevtbench.training", "cobevtbench.evaluation",
+        "cobevtbench.scripts",
     ):
         importlib.import_module(name)
