@@ -1,0 +1,28 @@
+# Lens soiling and damage: the most common real camera fault, and the one least
+# likely to trigger an alarm -- the sensor keeps reporting, it just reports
+# less.
+#
+# Should produce a FRUSTUM-SHAPED hole in the BEV map (the occluded image
+# region projected along its rays) and therefore a spatially localised hole in
+# comm/r0/selection_mask, checkable against the occlusion mask.
+#
+# TWO SEVERITY CONVENTIONS SHARE THIS KEY. Occlusion's `severity` is a FRACTION
+# in [0, 1] -- the occluded area under `severity_mode: coverage`. The
+# MultiCorrupt-backed weather injectors (faults/weather.yaml) use INTEGER
+# levels 1/2/3 on the same key name. Passing 2 here raises at construction
+# rather than silently meaning something else, which is the only reason the
+# collision is tolerable.
+#
+# `pattern` selects dirt / scratch / crack. It is not spelled `kind` because
+# that name is already the registry's injector-family discriminator.
+name: occlusion
+image_faults:
+  - {kind: occlusion, severity: 0.3, severity_mode: coverage, temporal: persistent}
+agent_scope: all          # a dirty lens belongs to the vehicle that owns it
+sweep:
+  - {}
+  - {image_faults: [{kind: occlusion, severity: 0.1, severity_mode: coverage, temporal: persistent}]}
+  - {image_faults: [{kind: occlusion, severity: 0.3, severity_mode: coverage, temporal: persistent}]}
+  - {image_faults: [{kind: occlusion, severity: 0.5, severity_mode: coverage, temporal: persistent}]}
+  - {image_faults: [{kind: occlusion, pattern: crack, severity: 0.3, severity_mode: coverage}]}
+  - {image_faults: [{kind: occlusion, pattern: scratch, severity: 0.3, severity_mode: coverage}]}

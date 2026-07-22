@@ -1,0 +1,22 @@
+# OPV2V camera track (A15: 416x160 input, 40 m x 40 m BEV).
+#
+# NOTE (A14): there is no released Where2comm camera model and no published
+# camera table for this architecture, so results here are internal comparisons
+# -- clean versus faulted under an identical model -- and are NOT a
+# reproduction of anything. The lift is our construction (A13).
+name: opv2v_camera
+adapter: opv2v
+track: camera
+root: /deepstore/datasets/course/adas/opv2v
+split: {train: train, val: validate, test: test}
+scenarios: null
+fps: 10.0
+max_cav: 5
+n_cameras: 4
+image_size: [160, 416]
+camera_names: null
+grid:
+  voxel_size: [0.4, 0.4]
+  point_range: [-20.0, -20.0, -3.0, 20.0, 20.0, 1.0]
+  downsample: 2
+categories: [car]

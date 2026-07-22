@@ -1,0 +1,12 @@
+# Collaborators vanish from the link. Tests the ego's fallback to its own
+# features, and unlike pose error it DOES move the bandwidth column: an absent
+# agent sends nothing.
+name: agent_drop
+pipeline: {agent_drop: {p_drop: 0.25}}
+agent_scope: non-ego
+sweep:
+  - {}
+  - {pipeline: {agent_drop: {p_drop: 0.1}}}
+  - {pipeline: {agent_drop: {p_drop: 0.25}}}
+  - {pipeline: {agent_drop: {p_drop: 0.5}}}
+  - {pipeline: {agent_drop: {p_drop: 0.75}}}

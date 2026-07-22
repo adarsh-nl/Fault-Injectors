@@ -1,0 +1,13 @@
+# Localisation error on the V2X link. The cleanest fault in the suite: because
+# each agent selects in its OWN frame, a pose error changes nothing about what
+# was transmitted -- only where it lands. Expect AP to move and the bandwidth
+# column to stay byte-identical.
+name: pose_error
+pipeline: {pose_error: {sigma_xy: 0.4, sigma_heading: 0.4}}
+agent_scope: non-ego
+sweep:
+  - {}
+  - {pipeline: {pose_error: {sigma_xy: 0.1, sigma_heading: 0.1}}}
+  - {pipeline: {pose_error: {sigma_xy: 0.2, sigma_heading: 0.2}}}
+  - {pipeline: {pose_error: {sigma_xy: 0.4, sigma_heading: 0.4}}}
+  - {pipeline: {pose_error: {sigma_xy: 0.8, sigma_heading: 0.8}}}

@@ -1,0 +1,57 @@
+# The paper's fusion equation (A4/A5), as opposed to the released default.
+#
+# TransformerFusion is a genuinely different module -- learned multi-head
+# attention with the confidence weighting W = MHA (X) C_j -- which is why it
+# gets its own file. Scalar variants (rounds, selector, threshold, budget) do
+# NOT: config groups are whole-file replacements here, so a near-duplicate per
+# scalar would drift the moment a shared default changed. They are leaf
+# overrides instead, listed in the README:
+#
+#   model.communication.rounds=3
+#   model.communication.selector=budget model.communication.budget_bytes=16384
+name: where2comm_lidar_transformer
+track: lidar
+
+encoder:
+  kind: lidar
+  vfe_channels: 64
+  block_channels: [64, 128, 256]
+  block_strides: [2, 2, 2]
+  block_layers: [3, 5, 5]
+  upsample_channels: 128
+  out_channels: 256
+
+confidence:
+  anchor_reduce: max
+  gaussian_smooth: {enabled: true, k_size: 3, c_sigma: 1.0,
+                    normalize: true, padding_mode: zeros}
+
+communication:
+  rounds: 1
+  selector: threshold
+  threshold: 0.01
+  topk: null
+  budget_bytes: null
+  bytes_per_element: 4
+  use_request_map: true
+  self_mask: ones
+  train_bandwidth: [0.1, 1.0]
+  broadcast_round_zero: true
+
+fusion:
+  aggregator: transformer       # A4
+  heads: 8
+  with_spe: false
+  with_scm: true                # A5 -- the paper's confidence weighting
+  dropout: 0.0
+  mlp_dim: null
+
+head: {num_anchors: 2, num_classes: 1}
+loss: {alpha: 0.25, gamma: 2.0, reg_weight: 2.0, single_weight: 1.0,
+       round_weights: null}
+score_threshold: 0.20
+nms_iou: 0.15
+
+assumptions:
+  A4: "aggregator=transformer -- the paper's equation, not the released default"
+  A5: "with_scm=true: attention weights multiplied by the sender's confidence"

@@ -1,0 +1,76 @@
+# Where2comm, LiDAR track. Defaults follow the released implementation unless
+# an assumption says otherwise; every A-number is recorded in meta.json.
+name: where2comm_lidar
+track: lidar
+
+encoder:
+  kind: lidar
+  vfe_channels: 64
+  block_channels: [64, 128, 256]
+  block_strides: [2, 2, 2]      # block_strides[0] must equal dataset.grid.downsample
+  block_layers: [3, 5, 5]
+  upsample_channels: 128
+  out_channels: 256             # D
+
+confidence:
+  anchor_reduce: max            # A2
+  gaussian_smooth:
+    enabled: true               # A9
+    k_size: 3
+    c_sigma: 1.0
+    normalize: true             # A16 -- false reproduces the released filter
+    padding_mode: zeros         # 'replicate' removes the map-edge bias
+
+communication:
+  rounds: 1                     # A3; multi_round.yaml sets 3
+  selector: threshold           # A1: threshold | topk | budget
+  threshold: 0.01               # released default. NOTE: sigmoid(-4.59) =
+                                # 0.010051 is the head's focal-loss prior, so an
+                                # UNTRAINED model clears this everywhere and
+                                # selects the whole map. See the README.
+  topk: null
+  budget_bytes: null
+  bytes_per_element: 4          # A8 -- the paper's log2 axis is float32
+  use_request_map: true         # A7; a no-op at rounds == 1
+  self_mask: ones               # A6
+  train_bandwidth: [0.1, 1.0]   # A17, the released curriculum
+  broadcast_round_zero: true
+
+fusion:
+  aggregator: atten             # A4: atten | max | transformer
+  heads: 8
+  with_spe: false
+  with_scm: true                # A5; transformer aggregator only
+  dropout: 0.0
+  mlp_dim: null
+
+head:
+  num_anchors: 2
+  num_classes: 1
+
+loss:
+  alpha: 0.25
+  gamma: 2.0
+  reg_weight: 2.0
+  single_weight: 1.0            # A11 -- the confidence head's only gradient
+  round_weights: null
+
+score_threshold: 0.20
+nms_iou: 0.15
+
+assumptions:
+  A1: "selector=threshold (released code); topk/budget trace the paper curve"
+  A2: "confidence = sigmoid(pre-fusion cls logits).max(anchors)"
+  A3: "K=1 rounds by default"
+  A4: "aggregator=atten (released default), which has NO parameters"
+  A5: "AttenFusion does not confidence-weight; TransformerFusion does"
+  A6: "self-link mask forced to ones"
+  A7: "comm reported as exact bytes AND the released cell ratio"
+  A8: "4 bytes per element, per the paper's log2 formula"
+  A9: "gaussian smoothing on, k=3 sigma=1.0"
+  A10: "single-scale fusion"
+  A11: "round-0 single-agent output separately supervised (ego row only)"
+  A12: "continuous affine warp; sub-cell pose error must survive"
+  A16: "gaussian kernel normalised to sum 1 (released sums to 0.7795)"
+  A17: "training keeps a random fraction of the map (the paper curriculum)"
+  A18: "multi-round is ego-centric; senders' features fixed across rounds"

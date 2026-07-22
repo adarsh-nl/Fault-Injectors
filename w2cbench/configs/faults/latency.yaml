@@ -1,0 +1,12 @@
+# Stale collaborator data. Where2comm AMPLIFIES this relative to a fixed-fusion
+# model: the stale frame carries a stale confidence map too, so a collaborator
+# selects confidently for where the objects WERE. The mechanism works against
+# the model here, which is the interaction worth measuring.
+name: latency
+pipeline: {latency: {mu_delay: 0.2, sigma_jitter: 0.02}}
+agent_scope: non-ego
+sweep:
+  - {}
+  - {pipeline: {latency: {mu_delay: 0.1, sigma_jitter: 0.02}}}
+  - {pipeline: {latency: {mu_delay: 0.2, sigma_jitter: 0.02}}}
+  - {pipeline: {latency: {mu_delay: 0.4, sigma_jitter: 0.05}}}

@@ -1,0 +1,17 @@
+# Camera miscalibration (src.fault_injectors.CalibrationErrorInjector).
+#
+# Distinct from pose_error, which misaligns an AGENT: this misaligns a CAMERA
+# WITHIN an agent, so the ego can corrupt its own features -- and unlike a V2X
+# fault the ego is not exempt. K and E enter the model only at
+# lift/frustum_points, so the image content is untouched and only the geometry
+# moves.
+name: calibration_error
+calibration: {sigma_focal_px: 8.0, agents: all}
+agent_scope: all
+sweep:
+  - {}
+  - {calibration: {sigma_focal_px: 2.0, agents: all}}
+  - {calibration: {sigma_focal_px: 8.0, agents: all}}
+  - {calibration: {sigma_rotation_deg: 1.0, agents: all}}
+  - {calibration: {sigma_rotation_deg: 3.0, agents: all}}
+  - {calibration: {sigma_translation_m: 0.1, agents: all}}

@@ -1,0 +1,14 @@
+# The causal chain this package exists to demonstrate: a physical fault ->
+# confidence -> selection -> bytes. Recording just these keeps taps.csv small
+# enough to read by eye while still answering the central question.
+name: comm
+stats:
+  include:
+    - "confidence/r*/map"
+    - "confidence/r*/smoothed"
+    - "comm/r*/request_map"
+    - "comm/r*/priority"
+    - "comm/r*/selection_mask"
+    - "comm/r*/selected_count"
+    - "comm/r*/comm_graph"
+    - "comm/r*/bytes"

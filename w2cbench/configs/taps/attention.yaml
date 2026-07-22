@@ -1,0 +1,16 @@
+# Fusion attention, plus the tensors that explain it. Answers whether the ego
+# down-weights a corrupted collaborator or integrates it at full strength --
+# two failures that look identical in the output and call for different fixes.
+name: attention
+stats:
+  include:
+    - "fusion/r*/softmax"
+    - "fusion/r*/scores"
+    - "fusion/r*/scores_masked"
+    - "fusion/r*/confidence_weighted"
+    - "align/r*/roi_mask"
+    - "comm/r*/comm_graph"
+dump:
+  include: ["fusion/r*/softmax"]
+  every_n: 10
+  max_dumps: 50

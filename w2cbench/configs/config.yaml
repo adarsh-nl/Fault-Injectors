@@ -1,0 +1,24 @@
+# Root configuration. Groups are composed from configs/<group>/<name>.yaml;
+# swap a group with `group=name` on the CLI, set a leaf with `a.b.c=value`.
+defaults:
+  model: where2comm_lidar
+  dataset: synthetic_lidar
+  faults: none
+  taps: none
+  trainer: default
+
+experiment_name: ${model.name}_${dataset.name}_${faults.name}
+paper: "Where2comm (arXiv:2209.12836, NeurIPS 2022)"
+seed: 2022
+deterministic: true
+results_dir: results
+log_predictions: false
+device: auto            # auto | cuda | cpu
+
+# The accuracy-versus-bandwidth curve (design doc section 9.3). Null evaluates
+# at the model's configured selector only; a list of selector settings crosses
+# every fault condition with every budget and multiplies runtime accordingly.
+# Each bandwidth group gets its own clean reference -- comparing a faulted run
+# at one budget against a clean run at another would attribute the budget
+# reduction to the fault.
+bandwidth_sweep: null

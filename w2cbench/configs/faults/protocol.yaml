@@ -1,0 +1,23 @@
+# Protocol-plane faults (plane 2) -- Where2comm's own control messages,
+# corrupted at the transmission boundary. Not reachable by sensor injection.
+#
+#   python -m w2cbench.scripts.benchmark faults=protocol \
+#          model.communication.rounds=3
+#
+# RUN THIS WITH rounds>1. RequestLossInjector is PROVABLY a no-op at K=1 --
+# with one round nobody consumes a request map -- so a K=1 run of this family
+# reports perfect robustness that could not have come out any other way.
+name: protocol
+pipeline: {}                    # plane 1: none, so results stay attributable
+agent_scope: non-ego
+protocol_pipeline:
+  request_loss: {p_loss: 0.25}
+sweep:
+  - {}
+  - {protocol_pipeline: {request_loss: {p_loss: 0.1}}}
+  - {protocol_pipeline: {request_loss: {p_loss: 0.25}}}
+  - {protocol_pipeline: {request_loss: {p_loss: 0.5}}}
+  - {protocol_pipeline: {confidence_report: {mode: inflate, magnitude: 0.3, p_affected: 0.5}}}
+  - {protocol_pipeline: {confidence_report: {mode: deflate, magnitude: 0.3, p_affected: 0.5}}}
+  - {protocol_pipeline: {bandwidth_cap: {max_bytes: 16384}}}
+  - {protocol_pipeline: {bandwidth_cap: {max_bytes: 4096}}}

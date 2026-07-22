@@ -1,0 +1,9 @@
+# The reference condition. Every robustness number is a comparison against
+# this run, so it must be provably clean: build_bridges(None) creates no
+# injector at all, on either plane, rather than injectors configured to do
+# nothing.
+name: clean
+pipeline: {}
+protocol_pipeline: {}
+agent_scope: non-ego
+sweep: []

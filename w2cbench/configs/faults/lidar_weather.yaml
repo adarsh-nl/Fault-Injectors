@@ -1,0 +1,13 @@
+# Sensor degradation: the feedback case. Fog and thinning lower a
+# collaborator's confidence, so fewer cells clear selection and MEASURED
+# BANDWIDTH FALLS while perception degrades. Reported alone, that column says
+# the system got more efficient -- which is why every row also carries AP.
+name: lidar_weather
+lidar_faults: [{kind: fog, severity: 2}]
+agent_scope: non-ego
+sweep:
+  - {}
+  - {lidar_faults: [{kind: fog, severity: 1}]}
+  - {lidar_faults: [{kind: fog, severity: 3}]}
+  - {lidar_faults: [{kind: points_reduction, severity: 2}]}
+  - {lidar_faults: [{kind: beam_reduction, severity: 2}]}

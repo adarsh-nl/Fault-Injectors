@@ -1,0 +1,23 @@
+# Camera-track sensor degradation. The half of src/fault_injectors the LiDAR
+# track cannot reach at all.
+#
+# Fog is the condition worth watching: it does not merely blur features, it
+# produces a CONFIDENT depth distribution centred on the wrong bin, so features
+# splat into the wrong BEV cell and the confidence map then reports high
+# confidence at a location holding nothing -- which Where2comm faithfully
+# transmits. Watch lift/depth_distribution alongside confidence/r0/map.
+name: weather
+image_faults: [{kind: fog, severity: 2}]
+agent_scope: all          # weather is environmental; the ego is not exempt
+                          # (set non-ego to isolate 'collaborator degraded')
+
+# severity is 1, 2 or 3 -- MultiCorrupt's integer scale. NOTE that
+# faults/occlusion.yaml uses the SAME key for a fraction in [0, 1]; the two
+# families raise on each other's values rather than reinterpreting them.
+sweep:
+  - {}
+  - {image_faults: [{kind: fog, severity: 1}]}
+  - {image_faults: [{kind: fog, severity: 3}]}
+  - {image_faults: [{kind: snow, severity: 2}]}
+  - {image_faults: [{kind: darkness, severity: 2}]}
+  - {image_faults: [{kind: brightness, severity: 2}]}

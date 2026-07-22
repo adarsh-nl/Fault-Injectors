@@ -1,0 +1,17 @@
+# OPV2V LiDAR. On the UT HPC the data is read-only under /deepstore.
+name: opv2v_lidar
+adapter: opv2v
+track: lidar
+root: /deepstore/datasets/course/adas/opv2v
+split: {train: train, val: validate, test: test}
+scenarios: null               # null = every scenario directory in the split
+fps: 10.0
+max_cav: 5
+# Voxel (0.4, 0.4) m; the range divides by the backbone stride product.
+grid:
+  voxel_size: [0.4, 0.4]
+  point_range: [-51.2, -51.2, -3.0, 51.2, 51.2, 1.0]
+  downsample: 2
+max_points_per_pillar: 32
+max_pillars: 32000
+categories: [car]

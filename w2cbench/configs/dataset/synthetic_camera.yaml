@@ -1,0 +1,19 @@
+# Synthetic multi-camera cooperative scenes from cpbench. No data needed.
+# The BEV grid is deliberately the same shape the LiDAR groups use, so the two
+# tracks are directly comparable and the lift lands on an identical grid.
+name: synthetic_camera
+adapter: synthetic_camera
+track: camera
+fps: 10.0
+max_cav: 3
+n_frames: 16
+n_agents: 3
+n_objects: 4
+n_cameras: 4
+image_size: [64, 64]          # the resolution the synthetic intrinsics assume
+camera_names: null            # null = each agent's own, sorted
+grid:
+  voxel_size: [1.6, 1.6]
+  point_range: [-25.6, -25.6, -3.0, 25.6, 25.6, 1.0]
+  downsample: 2
+categories: null

@@ -1,0 +1,57 @@
+# Where2comm, camera track.
+#
+# Differs from where2comm_lidar.yaml in the `encoder` block and NOTHING ELSE.
+# That is the package's central structural claim expressed as a config file:
+# the confidence generator, communication, fusion and decoder all operate on a
+# BEV feature map and cannot tell how it was produced. test_track_parity checks
+# it against real forward passes.
+name: where2comm_camera
+track: camera
+
+encoder:
+  kind: camera
+  out_channels: 256             # D -- identical to the LiDAR track
+  backbone:                     # cpbench.models.image.ResnetEncoder
+    arch: resnet34
+    pretrained: true
+    id_pick: [1, 2, 3]          # layer2/3/4 -> 128/256/512 channels
+  lifting:                      # A13, depth-distribution splatting
+    kind: depth_splat
+    level: 0                    # which id_pick level to lift (finest)
+    depth_bins: [4.0, 45.0, 1.0]   # min, max, step in metres -- the memory knob
+
+confidence:
+  anchor_reduce: max
+  gaussian_smooth: {enabled: true, k_size: 3, c_sigma: 1.0,
+                    normalize: true, padding_mode: zeros}
+
+communication:
+  rounds: 1
+  selector: threshold
+  threshold: 0.01
+  topk: null
+  budget_bytes: null
+  bytes_per_element: 4
+  use_request_map: true
+  self_mask: ones
+  train_bandwidth: [0.1, 1.0]
+  broadcast_round_zero: true
+
+fusion:
+  aggregator: atten
+  heads: 8
+  with_spe: false
+  with_scm: true
+  dropout: 0.0
+  mlp_dim: null
+
+head: {num_anchors: 2, num_classes: 1}
+loss: {alpha: 0.25, gamma: 2.0, reg_weight: 2.0, single_weight: 1.0,
+       round_weights: null}
+score_threshold: 0.20
+nms_iou: 0.15
+
+assumptions:
+  A13: "camera lifting = depth-distribution splatting; no reference impl exists"
+  A14: "camera results are internal comparisons; no published baseline"
+  A15: "camera 416x160 input, 40m x 40m BEV"

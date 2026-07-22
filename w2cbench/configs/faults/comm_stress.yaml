@@ -1,0 +1,16 @@
+# Everything at once: the realistic degraded-V2X condition. Reported separately
+# from the single-fault sweeps because faults compound non-additively -- a pose
+# error the model tolerates alone can become unrecoverable once a collaborator
+# has also dropped out and the link has gone stale.
+name: comm_stress
+pipeline:
+  agent_drop: {p_drop: 0.25}
+  latency: {mu_delay: 0.2, sigma_jitter: 0.02}
+  pose_error: {sigma_xy: 0.4, sigma_heading: 0.4}
+agent_scope: non-ego
+sweep:
+  - {}
+  - {pipeline: {pose_error: {sigma_xy: 0.4, sigma_heading: 0.4}}}
+  - {pipeline: {agent_drop: {p_drop: 0.25}, pose_error: {sigma_xy: 0.4, sigma_heading: 0.4}}}
+  - {pipeline: {agent_drop: {p_drop: 0.25}, latency: {mu_delay: 0.2},
+                pose_error: {sigma_xy: 0.4, sigma_heading: 0.4}}}

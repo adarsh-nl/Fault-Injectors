@@ -1,0 +1,3 @@
+# No observation. The default: taps cost a detach and a few reductions per
+# emit site, which is cheap but pointless when nothing reads them.
+name: none
