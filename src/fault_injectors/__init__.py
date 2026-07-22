@@ -15,6 +15,8 @@ Single-agent (sensor-level) failure modes
 missing_modality      : sensor dropout (Bernoulli-gated zeroing / emptying)
 temporal_misalignment : stale image pairing via index shifting
 sensor_occlusion      : sensor-surface soiling / damage (dirt, scratch, crack)
+calibration           : camera intrinsic / extrinsic drift -- the geometry a
+                        camera BEV model projects through, not metadata
 lidar_fog             : LiDAR fog (EXACT MultiCorrupt simulate_fog)
 lidar_snow            : LiDAR snow (MultiCorrupt/Hahner physics verbatim)
 
@@ -36,6 +38,7 @@ those injectors raises an informative ImportError instead of breaking the
 whole package at import time.
 """
 
+from .calibration import CalibrationErrorInjector, rotation_from_axis_angle
 from .missing_modality import (
     MissingModalityInjector,
     drop_image,
@@ -59,6 +62,8 @@ from .communication import (
 )
 
 __all__ = [
+    'CalibrationErrorInjector',
+    'rotation_from_axis_angle',
     'MissingModalityInjector',
     'drop_image',
     'drop_points',

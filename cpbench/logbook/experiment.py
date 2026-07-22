@@ -157,6 +157,10 @@ class ExperimentLogger:
             tag = "_".join(str(v) for v in rec.condition.values()) or "clean"
             for key, val in rec.detection.items():
                 self.tb.add_scalar(f"eval/{tag}/{key}", val, rec.epoch)
+            # Communication volume is a headline result for bandwidth-aware
+            # papers, not profiling noise; it belongs on the same board as AP.
+            for key, val in rec.comms.items():
+                self.tb.add_scalar(f"comms/{tag}/{key}", val, rec.epoch)
 
     def log_fault_records(self, records: Iterable[Any]) -> None:
         """FaultRecords from DataFaultBridge -> injection_summary.csv."""

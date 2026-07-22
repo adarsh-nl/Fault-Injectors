@@ -80,6 +80,14 @@ class EvalRecord:
     union of columns across all rows: a shared key would silently merge
     `ap70` and `iou_vehicle` into one column when detection and segmentation
     experiments land in the same results directory.
+
+    `comms` is transmitted-volume metrics (see `cpbench.metrics.comms`), and
+    it is deliberately not folded into `system`. Latency and memory are
+    properties of the machine the run happened on; communication volume is a
+    property of the *model's decisions* -- for a paper such as Where2comm it
+    is a headline result, varies with the input, and is what a fault can move
+    without touching a single wall-clock number. Reporting it in `sys_*`
+    columns would file the paper's contribution under profiling.
     """
 
     epoch: int
@@ -90,6 +98,7 @@ class EvalRecord:
     segmentation: Dict[str, float] = field(default_factory=dict)
     robustness: Dict[str, float] = field(default_factory=dict)
     system: Dict[str, float] = field(default_factory=dict)
+    comms: Dict[str, float] = field(default_factory=dict)
     per_class: Dict[str, float] = field(default_factory=dict)
     n_frames: int = 0
     n_faults_injected: int = 0
@@ -105,6 +114,7 @@ class EvalRecord:
         row.update(_flat("seg_", self.segmentation))
         row.update(_flat("rob_", self.robustness))
         row.update(_flat("sys_", self.system))
+        row.update(_flat("comm_", self.comms))
         row.update(_flat("cls_", self.per_class))
         return row
 

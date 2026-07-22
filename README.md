@@ -11,8 +11,11 @@ and two paper benchmarks built on top of it.
 | `cpbench/` | paper-agnostic benchmarking core: taps, logbook, metrics, PointPillars blocks |
 | `corabench/` | **CoRA** ([arXiv:2512.13191](https://arxiv.org/abs/2512.13191), AAAI 2026) |
 | `lgcpbench/` | **LGCP** ([arXiv:2601.12749](https://arxiv.org/abs/2601.12749)) |
+| `cobevtbench/` | **CoBEVT** ([arXiv:2207.02202](https://arxiv.org/abs/2207.02202), CoRL 2022) |
+| `w2cbench/` | **Where2comm** ([arXiv:2209.12836](https://arxiv.org/abs/2209.12836), NeurIPS 2022) |
 
-Dependency direction is `src/ <- cpbench/ <- {corabench/, lgcpbench/}`, enforced
+Dependency direction is
+`src/ <- cpbench/ <- {corabench/, lgcpbench/, cobevtbench/, w2cbench/}`, enforced
 statically by `cpbench/tests/test_layering.py`. `src/` stays standalone: the
 toolkit is usable on its own, with or without either benchmark.
 
@@ -155,6 +158,13 @@ cobevtbench/               CoBEVT: sparse fused-axial attention (FAX), camera
                            primary fault surface is the IMAGE -- camera
                            dropout, lens occlusion, weather, miscalibration
                            (see cobevtbench/README.md)
+w2cbench/                  Where2comm: spatial confidence maps decide WHAT GETS
+                           TRANSMITTED, so a fault changes the bandwidth as
+                           well as the accuracy. The first package here that
+                           reports communication volume beside AP in every row
+                           -- because a degraded sensor makes both fall, and
+                           the efficiency column alone would read as a win.
+                           LiDAR and camera tracks (see w2cbench/README.md)
 
 examples/
   opencood_integration.py  fault injection inside OpenCOOD dataloaders
@@ -164,6 +174,7 @@ docs/
   corabench_design.md      CoRA design doc (two-plane contract)
   lgcp_design.md           LGCP design doc (three-plane contract, B1-B12)
   cobevt_design.md         CoBEVT design doc (FAX injection map, A1-A10)
+  where2comm_design.md     Where2comm design doc (three planes, A1-A18)
   information_quality.md coordinate_transformation.md Occlusion.md ...
 ```
 
@@ -176,10 +187,13 @@ The toolkit corrupts **data**. The benchmarks add two more surfaces:
    *No model code corrupts a tensor.*
 2. **Measurement plane** (`cpbench/observation/`) -- read-only taps at every
    intermediate tensor. *Observation cannot alter the forward pass.*
-3. **Control plane** (`lgcpbench/faults/`) -- LGCP-only: corrupts the RSU's
-   *decisions* (confidence reports, group assignments, leader elections,
-   transmission schedules, the broadcast global view). *Algorithm code is never
-   fault-aware.* These failure modes have no tensor-level equivalent.
+3. **Control / protocol plane** (`lgcpbench/faults/`, `w2cbench/faults/`) --
+   corrupts an algorithm's own *messages*, at the boundary where they are sent.
+   LGCP: the RSU's decisions (confidence reports, group assignments, leader
+   elections, transmission schedules, the broadcast global view). Where2comm:
+   the request maps and reported confidence its protocol runs on. *Algorithm
+   code is never fault-aware.* These failure modes have no tensor-level
+   equivalent and no sensor-level one either.
 
 Run the tests (no dataset downloads required):
 
@@ -187,7 +201,7 @@ Run the tests (no dataset downloads required):
 pip install pytest && python -m pytest src/tests src/info_quality/tests -q
 # the benchmarks additionally need torch and einops:
 pip install -r requirements-bench.txt
-python -m pytest cpbench corabench/tests lgcpbench cobevtbench --doctest-modules -q
+python -m pytest cpbench corabench/tests lgcpbench cobevtbench w2cbench --doctest-modules -q
 ```
 
 ## Information quality (mutual information)

@@ -1,7 +1,7 @@
 """
 Enforce the repository's dependency direction.
 
-    src/  <-  cpbench/  <-  {corabench/, lgcpbench/, cobevtbench/}
+    src/  <-  cpbench/  <-  {corabench/, lgcpbench/, cobevtbench/, w2cbench/}
 
 This is the rule the extraction exists to make true, and it is exactly the
 kind of thing that decays silently: one convenient import from a paper package
@@ -20,7 +20,7 @@ import pathlib
 from typing import Iterator, Set, Tuple
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
-PAPER_PACKAGES = ("corabench", "lgcpbench", "cobevtbench")
+PAPER_PACKAGES = ("corabench", "lgcpbench", "cobevtbench", "w2cbench")
 
 
 def _imports(path: pathlib.Path) -> Iterator[str]:
@@ -113,6 +113,44 @@ def test_no_stale_references_to_moved_modules() -> None:
     assert not offenders, "stale imports of moved modules:\n  " + "\n  ".join(offenders)
 
 
+# Names that were consolidated into cpbench because the copies were
+# effectively identical -- and, in one case, because they were NOT, in a way
+# nothing detected. A paper package growing its own again is the regression
+# this guards.
+CONSOLIDATED = ("DetectionLoss", "sigmoid_focal_loss", "ResnetEncoder",
+                "labels_to_array", "ordered_agent_ids", "agent_to_ego_matrix",
+                "world_to_ego_matrix")
+
+
+def test_no_paper_package_redefines_a_consolidated_name() -> None:
+    """``DetectionLoss`` lived in two packages and they had DIVERGED: one
+    collapsed the class axis, writing every positive anchor into channel 0
+    regardless of its label. At ``num_classes: 1`` -- every shipped default --
+    the two agree exactly, so nothing failed and the loss still fell, on the
+    wrong objective.
+
+    That is the failure mode this test exists for. Two copies of a thing are
+    tolerable; two copies that agree on the default path and disagree off it
+    are not, because the disagreement surfaces as a model that trains and
+    performs slightly worse for reasons nobody can find.
+
+    Re-exports are fine and are what makes each move additive -- only a fresh
+    ``class``/``def`` counts.
+    """
+    offenders = []
+    for package in PAPER_PACKAGES:
+        for path in _python_files(package):
+            text = path.read_text()
+            for name in CONSOLIDATED:
+                for keyword in ("class", "def"):
+                    if f"\n{keyword} {name}(" in text:
+                        offenders.append(
+                            f"{path.relative_to(REPO)} redefines {name}")
+    assert not offenders, (
+        "these were consolidated into cpbench; import them instead of "
+        "redefining:\n  " + "\n  ".join(sorted(offenders)))
+
+
 def test_every_package_is_importable() -> None:
     """Catches a package left without an __init__ or with a broken re-export."""
     import importlib
@@ -131,5 +169,10 @@ def test_every_package_is_importable() -> None:
         "cobevtbench.fusion", "cobevtbench.models", "cobevtbench.data",
         "cobevtbench.faults", "cobevtbench.training", "cobevtbench.evaluation",
         "cobevtbench.scripts",
+        # w2cbench is being built subpackage by subpackage (design doc s13);
+        # each entry lands with the step that creates it.
+        "w2cbench", "w2cbench.observation", "w2cbench.models",
+        "w2cbench.comm", "w2cbench.fusion", "w2cbench.data",
+        "w2cbench.training", "w2cbench.evaluation", "w2cbench.faults", "w2cbench.scripts", "cpbench.training",
     ):
         importlib.import_module(name)

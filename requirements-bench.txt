@@ -9,13 +9,20 @@
 # https://pytorch.org/get-started/locally/ -- and note that the HPC sbatch
 # scripts pin a CUDA module, so match it there.
 torch
+
+# torchvision: the camera tracks' ResNet feature pyramid (cpbench/models/image.py)
+# and its pretrained weights. LiDAR-only runs import cpbench.models without
+# pulling it in -- the export is lazy for exactly that reason -- but the
+# benchmark requirements install it, because a camera run that discovers the
+# missing dependency at model-construction time has already queued on a cluster.
 torchvision
 
-# einops: required by cobevtbench/attention. CoBEVT's FAX partitioning is
-# defined by rearrange patterns in which local and global attention differ by
-# a single character -- '(x w1)' versus '(w1 x)'. Written as raw torch
-# reshape/permute chains that distinction becomes two near-identical blocks of
-# index arithmetic, which is exactly the kind of code that hides a bug.
+# einops: required by cobevtbench/attention and by cpbench/models/image.py.
+# CoBEVT's FAX partitioning is defined by rearrange patterns in which local and
+# global attention differ by a single character -- '(x w1)' versus '(w1 x)'.
+# Written as raw torch reshape/permute chains that distinction becomes two
+# near-identical blocks of index arithmetic, which is exactly the kind of code
+# that hides a bug.
 einops
 
 # tensorboard is optional: cpbench.logbook.ExperimentLogger degrades to
