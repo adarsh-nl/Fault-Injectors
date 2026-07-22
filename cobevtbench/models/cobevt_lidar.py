@@ -33,7 +33,8 @@ import torch
 from torch import nn
 
 from cpbench.data import GridSpec
-from cpbench.models import DetectionHead, PointPillarEncoder
+from cpbench.models import (DetectionHead, PointPillarEncoder,
+                            validate_backbone_geometry)
 from cpbench.observation import TapProtocol, emit
 
 from ..fusion.fusebevt import FuseBEVT
@@ -148,25 +149,12 @@ class CoBEVTLidar(nn.Module):
     def _validate_geometry(self, window: int, dim: int, dim_head: int) -> None:
         """Fail at construction, not twenty minutes into a cluster job.
 
-        The pillar-grid check is here because its failure mode is
-        particularly unhelpful: the BEV backbone downsamples by the product
-        of ``block_strides`` and upsamples each level back, so an indivisible
-        grid produces levels that are off by one pixel and surfaces as
-        ``Sizes of tensors must match ... Expected size 25 but got size 26``
-        from inside a ``torch.cat`` -- with no indication that the real cause
-        is the point range in a YAML file.
+        The pillar-grid and backbone-stride checks are delegated to
+        ``cpbench.models.validate_backbone_geometry``; see it for why each
+        matters. The FuseBEVT window check below is CoBEVT's own, because no
+        other package has a window.
         """
-        stride_product = 1
-        for stride in self.block_strides:
-            stride_product *= int(stride)
-        pillar_h, pillar_w = self.grid.grid_hw
-        if pillar_h % stride_product or pillar_w % stride_product:
-            raise ValueError(
-                f"pillar grid {pillar_h}x{pillar_w} does not divide by the "
-                f"backbone stride product {stride_product} "
-                f"(block_strides={tuple(self.block_strides)}). Choose a "
-                "point_range and voxel_size whose ratio is a multiple of it, "
-                f"e.g. a range of {stride_product * 8} cells per axis.")
+        validate_backbone_geometry(self.grid, self.block_strides)
 
         height, width = self.grid.feature_hw
         if height % window or width % window:

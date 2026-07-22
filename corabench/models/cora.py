@@ -37,7 +37,8 @@ from ..fusion.lc import LCModule
 from ..fusion.pac import PACModule
 from ..fusion.teacher import TeacherBranch
 from cpbench.observation.taps import TapProtocol
-from cpbench.models.encoder import PointPillarEncoder
+from cpbench.models.encoder import (PointPillarEncoder,
+                                    validate_backbone_geometry)
 from cpbench.models.heads import ConfidenceHead, DetectionHead
 
 
@@ -85,6 +86,13 @@ class CoRAModel(nn.Module):
                  teacher_enabled: bool = True,
                  score_threshold: float = 0.2) -> None:
         super().__init__()
+        # Before any submodule is built: the anchors, the decoder and every
+        # spatial op are sized from grid.feature_hw, while the backbone
+        # actually produces grid_hw // block_strides[0]. Both are settable
+        # from config, independently, and a mismatch lowers AP without ever
+        # raising.
+        validate_backbone_geometry(grid, block_strides)
+
         self.grid = grid
         self.num_anchors, self.num_classes = num_anchors, num_classes
 

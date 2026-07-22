@@ -10,12 +10,12 @@ LiDAR-only packages should not need it installed.
 """
 
 from .encoder import (BEVBackbone, PillarVFE, PointPillarEncoder,
-                      PointPillarScatter)
+                      PointPillarScatter, validate_backbone_geometry)
 from .heads import ConfidenceHead, DetectionHead
 
 __all__ = ["PillarVFE", "PointPillarScatter", "BEVBackbone",
            "PointPillarEncoder", "ConfidenceHead", "DetectionHead",
-           "ResnetEncoder"]
+           "ResnetEncoder", "validate_backbone_geometry"]
 
 
 def __getattr__(name: str):

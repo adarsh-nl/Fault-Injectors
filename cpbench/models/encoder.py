@@ -23,6 +23,78 @@ from torch import nn
 from ..observation.taps import TapProtocol, emit
 
 
+def validate_backbone_geometry(grid, block_strides: Sequence[int]) -> None:
+    """Check a ``GridSpec`` against the BEV backbone that will consume it.
+
+    Purpose
+        Catch, at construction, two geometry mistakes whose symptoms appear
+        far from their cause -- one loudly and late, one silently and never.
+
+    Inputs
+    ------
+    grid           anything with ``grid_hw``, ``feature_hw`` and
+                   ``downsample`` (i.e. a ``cpbench.data.GridSpec``).
+                   Duck-typed rather than imported, so ``cpbench.models``
+                   stays independent of ``cpbench.data``.
+    block_strides  the strides :class:`BEVBackbone` will be built with.
+
+    Raises
+    ------
+    ValueError naming both sides of whichever disagreement it found.
+
+    The two checks
+    --------------
+    *Divisibility.* The backbone downsamples by the product of
+    ``block_strides`` and upsamples each level back. An indivisible pillar
+    grid produces levels off by one pixel, and it surfaces as
+    ``Sizes of tensors must match ... Expected size 25 but got size 26`` from
+    inside a ``torch.cat`` -- with nothing to suggest the real cause is a
+    point range in a YAML file.
+
+    *Declared versus actual stride.* This is the quiet one.
+    ``GridSpec.feature_hw`` is ``grid_hw // downsample``, and it is what the
+    anchor generator, the spatial warp and the box decoder are all sized
+    from. But the resolution the backbone ACTUALLY produces is
+    ``grid_hw // block_strides[0]`` -- every pyramid level is upsampled back
+    to the *first* level, not to the input. When the two disagree nothing
+    raises on its own: the encoder returns a feature map of one size while
+    every consumer was built for another, and the first symptom is either a
+    shape error several modules downstream or a silently mismatched anchor
+    grid that lowers AP without ever failing.
+
+    Example
+    -------
+    >>> from cpbench.data import GridSpec
+    >>> spec = GridSpec(voxel_size=(0.4, 0.4),
+    ...                 point_range=(-51.2, -51.2, -3.0, 51.2, 51.2, 1.0))
+    >>> validate_backbone_geometry(spec, (2, 2, 2))          # consistent
+    >>> validate_backbone_geometry(spec, (4, 2, 2))
+    Traceback (most recent call last):
+    ValueError: grid.downsample=2 disagrees with block_strides[0]=4...
+    """
+    stride_product = 1
+    for stride in block_strides:
+        stride_product *= int(stride)
+    pillar_h, pillar_w = grid.grid_hw
+    if pillar_h % stride_product or pillar_w % stride_product:
+        raise ValueError(
+            f"pillar grid {pillar_h}x{pillar_w} does not divide by the "
+            f"backbone stride product {stride_product} "
+            f"(block_strides={tuple(block_strides)}). Choose a point_range "
+            "and voxel_size whose ratio is a multiple of it.")
+
+    first = int(block_strides[0])
+    if int(grid.downsample) != first:
+        raise ValueError(
+            f"grid.downsample={grid.downsample} disagrees with "
+            f"block_strides[0]={first}. The BEV backbone upsamples every "
+            "pyramid level back to the FIRST level's resolution, so it "
+            f"produces grid_hw // {first} = {pillar_h // first} cells, while "
+            f"GridSpec.feature_hw reports {grid.feature_hw} and the anchors, "
+            "the spatial warp and the box decoder are all sized from that. "
+            "Set them equal.")
+
+
 class PillarVFE(nn.Module):
     """Pillar feature encoder (single PFN layer, per the paper's backbone).
 

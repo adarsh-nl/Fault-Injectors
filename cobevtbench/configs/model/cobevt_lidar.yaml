@@ -8,6 +8,11 @@ track: lidar
 
 encoder:
   out_channels: 256
+  # Must satisfy block_strides[0] == dataset.grid.downsample: the backbone
+  # upsamples every pyramid level back to the FIRST level, so it produces
+  # grid_hw // block_strides[0], while the anchors and the warp are sized
+  # from grid.feature_hw = grid_hw // downsample. Checked at construction.
+  block_strides: [2, 2, 2]
 
 fusebevt:
   dim: null                # null -> encoder out_channels (no unstated projection)

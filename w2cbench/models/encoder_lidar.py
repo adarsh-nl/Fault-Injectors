@@ -30,7 +30,8 @@ from typing import Any, Dict, Optional, Sequence
 import torch
 
 from cpbench.data import GridSpec
-from cpbench.models import PointPillarEncoder
+from cpbench.models import (PointPillarEncoder,
+                            validate_backbone_geometry)
 from cpbench.observation import TapProtocol
 
 from .encoder import ObservationEncoder
@@ -119,47 +120,12 @@ class LidarPillarEncoder(ObservationEncoder):
                            block_strides: Sequence[int]) -> None:
         """Fail at construction, not twenty minutes into a cluster job.
 
-        Two checks, both guarding failure modes that surface far from their
-        cause.
-
-        *Divisibility.* The backbone downsamples by the product of
-        ``block_strides`` and upsamples each level back to the first level's
-        resolution. An indivisible pillar grid produces levels that are off by
-        one pixel and surfaces as ``Sizes of tensors must match ... Expected
-        size 25 but got size 26`` from inside a ``torch.cat``, with nothing to
-        suggest the real cause is a point range in a YAML file.
-
-        *Declared vs. actual stride.* ``GridSpec.downsample`` is what the
-        anchor generator, the spatial warp and the selection mask are all
-        sized from, but the resolution the backbone ACTUALLY produces is
-        ``grid_hw // block_strides[0]`` -- the first level is the one every
-        other level is upsampled back to. When the two disagree, nothing
-        raises: the encoder returns a feature map of one size while every
-        consumer was built for another, and the first symptom is a shape
-        error several modules downstream, or worse, a silently mismatched
-        anchor grid that lowers AP without failing.
+        Delegates to ``cpbench.models.validate_backbone_geometry``: the same
+        two mistakes are reachable from every package that drives a
+        PointPillars backbone from a GridSpec, and the check was duplicated
+        here first.
         """
-        stride_product = 1
-        for stride in block_strides:
-            stride_product *= int(stride)
-        pillar_h, pillar_w = grid.grid_hw
-        if pillar_h % stride_product or pillar_w % stride_product:
-            raise ValueError(
-                f"pillar grid {pillar_h}x{pillar_w} does not divide by the "
-                f"backbone stride product {stride_product} "
-                f"(block_strides={tuple(block_strides)}). Choose a "
-                "point_range and voxel_size whose ratio is a multiple of it.")
-
-        if int(grid.downsample) != int(block_strides[0]):
-            raise ValueError(
-                f"grid.downsample={grid.downsample} disagrees with "
-                f"block_strides[0]={block_strides[0]}. The BEV backbone "
-                "upsamples every pyramid level back to the FIRST level's "
-                "resolution, so its output is grid_hw // block_strides[0] "
-                f"= {grid.grid_hw[0] // int(block_strides[0])} cells, while "
-                f"GridSpec.feature_hw reports {grid.feature_hw} and the "
-                "anchors, the spatial warp and the selection mask are all "
-                "sized from that. Set them equal.")
+        validate_backbone_geometry(grid, block_strides)
 
     # -- forward ------------------------------------------------------------
 

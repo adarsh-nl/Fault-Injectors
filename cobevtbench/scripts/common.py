@@ -277,6 +277,7 @@ def _build_lidar_model(cfg: Dict[str, Any]) -> CoBEVTLidar:
     return CoBEVTLidar(
         build_grid_spec(cfg), max_cav=int(cfg["dataset"].get("max_cav", 5)),
         encoder_out_channels=int(m["encoder"]["out_channels"]),
+        block_strides=tuple(m["encoder"].get("block_strides", (2, 2, 2))),
         fuse_dim=fuse.get("dim"), fuse_depth=int(fuse["depth"]),
         fuse_window=int(fuse["window"]), fuse_dim_head=int(fuse["dim_head"]),
         fuse_mlp_dim=fuse.get("mlp_dim"),
