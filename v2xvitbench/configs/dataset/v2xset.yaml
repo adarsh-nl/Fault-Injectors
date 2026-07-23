@@ -1,0 +1,24 @@
+# V2XSet (the paper's own dataset): OPV2V on-disk format, negative cav ids
+# are infrastructure. The asymmetric range and stride-4 grid are the released
+# configuration: 192x704 pillars -> 48x176 fused cells, which every MSwin
+# window (4, 8, 16) tiles exactly.
+#
+# NOTE grid.downsample here is the FUSION stride (backbone stride 2 x shrink
+# stride 2) -- not 2 as in the packages without a shrink header. The model
+# validates the identity at construction.
+name: v2xset
+adapter: v2xset
+track: lidar
+root: /deepstore/datasets/course/adas/v2xset
+split: {train: train, val: validate, test: test}
+scenarios: null              # null = every scenario directory in the split
+fps: 10.0
+max_cav: 5
+grid:
+  voxel_size: [0.4, 0.4]
+  point_range: [-140.8, -38.4, -3.0, 140.8, 38.4, 1.0]
+  downsample: 4              # = encoder.block_strides[0] * shrink.stride
+max_points_per_pillar: 32
+max_pillars: 32000
+categories: null             # V2XSet labels are vehicles only
+force_infra: null            # real infra flags come from the data

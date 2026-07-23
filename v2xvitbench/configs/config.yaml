@@ -1,0 +1,19 @@
+# Root configuration. Groups are composed from configs/<group>/<name>.yaml;
+# swap a group with `group=name` on the CLI, set a leaf with `a.b.c=value`.
+defaults:
+  model: v2xvit
+  dataset: synthetic_lidar
+  faults: none
+  taps: none
+  trainer: default
+
+experiment_name: ${model.name}_${dataset.name}_${faults.name}
+paper: "V2X-ViT (arXiv:2203.10638, ECCV 2022)"
+seed: 2022
+deterministic: true
+results_dir: results
+log_predictions: false
+device: auto            # auto | cuda | cpu
+
+# Cap frames per evaluation condition; null evaluates the whole split.
+max_frames: null

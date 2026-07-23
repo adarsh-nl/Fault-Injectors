@@ -148,10 +148,12 @@ class OPV2VDataset(BaseDataset):
             return None                       # agent absent at this timestamp
         params = _load_yaml(yaml_path)
 
+        speed = params.get('ego_speed')
         frame = AgentFrame(
             agent_id=agent_id,
             agent_type='infrastructure' if int(agent_id) < 0 else 'vehicle',
             timestamp=int(ts) / self.fps if ts.isdigit() else None,
+            speed=float(speed) if speed is not None else None,
             pose=x_to_world(params['lidar_pose']),
         )
 

@@ -1,0 +1,12 @@
+# The paper's asynchronous setting (100-300 ms): collaborators' features are
+# served stale, and the TRUE staleness flows into time_delay -- the model
+# knows, and the DPE compensates. The delay_encoding family is this fault
+# with the knowledge taken away.
+name: latency
+pipeline: {latency: {mu_delay: 0.3, sigma_jitter: 0.05}}
+agent_scope: non-ego
+sweep:
+  - {}
+  - {pipeline: {latency: {mu_delay: 0.1, sigma_jitter: 0.02}}}
+  - {pipeline: {latency: {mu_delay: 0.2, sigma_jitter: 0.05}}}
+  - {pipeline: {latency: {mu_delay: 0.3, sigma_jitter: 0.05}}}

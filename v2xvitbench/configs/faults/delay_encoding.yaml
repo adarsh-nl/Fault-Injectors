@@ -1,0 +1,21 @@
+# THE package-defining family: split the reported delay from the actual
+# staleness. The paper's asynchronous experiment always has the two agree;
+# these conditions are what happens when the DPE is told a lie.
+#
+#   lat0.3            features stale, model told the truth (the paper's case)
+#   lat0.3_dly-zero   features stale, model told "fresh" -- isolates the
+#                     DPE's contribution: the difference between these two
+#                     conditions IS the delay encoding's value under fault
+#   dly-stale3        features fresh, model told they are 3 frames old
+#   dly-noise3        clock jitter: report off by up to +/-3 frames
+name: delay_encoding
+pipeline: {latency: {mu_delay: 0.3, sigma_jitter: 0.0}}
+metadata_pipeline: {delay_encoding: {mode: zero}}
+agent_scope: non-ego
+sweep:
+  - {}
+  - {pipeline: {latency: {mu_delay: 0.3, sigma_jitter: 0.0}}}
+  - {pipeline: {latency: {mu_delay: 0.3, sigma_jitter: 0.0}},
+     metadata_pipeline: {delay_encoding: {mode: zero}}}
+  - {metadata_pipeline: {delay_encoding: {mode: stale, magnitude_frames: 3}}}
+  - {metadata_pipeline: {delay_encoding: {mode: noise, magnitude_frames: 3}}}

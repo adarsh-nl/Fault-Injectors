@@ -1,0 +1,12 @@
+# Pose noise on ONLY the correction matrix the STTF consumes, applied
+# post-collate: points, labels and everything upstream stay clean. The
+# difference between this curve and faults=pose_error at equal sigma is the
+# part of pose sensitivity that is purely the feature warp.
+name: correction_matrix
+metadata_pipeline: {correction_matrix: {sigma_xy: 0.4, sigma_heading_deg: 0.8}}
+sweep:
+  - {}
+  - {metadata_pipeline: {correction_matrix: {sigma_xy: 0.1, sigma_heading_deg: 0.2}}}
+  - {metadata_pipeline: {correction_matrix: {sigma_xy: 0.2, sigma_heading_deg: 0.4}}}
+  - {metadata_pipeline: {correction_matrix: {sigma_xy: 0.4, sigma_heading_deg: 0.8}}}
+  - {metadata_pipeline: {correction_matrix: {sigma_xy: 0.5, sigma_heading_deg: 1.0}}}

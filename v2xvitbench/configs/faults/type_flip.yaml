@@ -1,0 +1,13 @@
+# The heterogeneity fault: flip the vehicle/infrastructure flag that selects
+# HMSA's per-type projections and relation matrices. One corrupted metadata
+# bit re-routes an agent through weights fitted to the other sensor class --
+# the failure mode only a heterogeneous architecture can have.
+name: type_flip
+metadata_pipeline: {type_flip: {p_flip: 0.5, direction: both}}
+sweep:
+  - {}
+  - {metadata_pipeline: {type_flip: {p_flip: 0.25}}}
+  - {metadata_pipeline: {type_flip: {p_flip: 0.5}}}
+  - {metadata_pipeline: {type_flip: {p_flip: 1.0}}}
+  - {metadata_pipeline: {type_flip: {p_flip: 1.0, direction: to_infra}}}
+  - {metadata_pipeline: {type_flip: {p_flip: 1.0, direction: to_vehicle}}}

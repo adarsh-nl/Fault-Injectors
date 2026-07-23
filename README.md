@@ -13,9 +13,10 @@ and two paper benchmarks built on top of it.
 | `lgcpbench/` | **LGCP** ([arXiv:2601.12749](https://arxiv.org/abs/2601.12749)) |
 | `cobevtbench/` | **CoBEVT** ([arXiv:2207.02202](https://arxiv.org/abs/2207.02202), CoRL 2022) |
 | `w2cbench/` | **Where2comm** ([arXiv:2209.12836](https://arxiv.org/abs/2209.12836), NeurIPS 2022) |
+| `v2xvitbench/` | **V2X-ViT** ([arXiv:2203.10638](https://arxiv.org/abs/2203.10638), ECCV 2022) |
 
 Dependency direction is
-`src/ <- cpbench/ <- {corabench/, lgcpbench/, cobevtbench/, w2cbench/}`, enforced
+`src/ <- cpbench/ <- {corabench/, lgcpbench/, cobevtbench/, w2cbench/, v2xvitbench/}`, enforced
 statically by `cpbench/tests/test_layering.py`. `src/` stays standalone: the
 toolkit is usable on its own, with or without either benchmark.
 
@@ -165,6 +166,13 @@ w2cbench/                  Where2comm: spatial confidence maps decide WHAT GETS
                            -- because a degraded sensor makes both fall, and
                            the efficiency column alone would read as a win.
                            LiDAR and camera tracks (see w2cbench/README.md)
+v2xvitbench/               V2X-ViT: heterogeneous multi-agent attention (HMSA)
+                           + multi-scale window attention (MSwin) + delay-aware
+                           positional encoding. The first package whose fault
+                           surface is the V2X METADATA itself -- the reported
+                           delay the DPE trusts and the vehicle/infra type flag
+                           that routes HMSA's weights
+                           (see v2xvitbench/README.md)
 
 examples/
   opencood_integration.py  fault injection inside OpenCOOD dataloaders
@@ -175,6 +183,7 @@ docs/
   lgcp_design.md           LGCP design doc (three-plane contract, B1-B12)
   cobevt_design.md         CoBEVT design doc (FAX injection map, A1-A10)
   where2comm_design.md     Where2comm design doc (three planes, A1-A18)
+  v2xvit_design.md         V2X-ViT design doc (metadata plane, A1-A10)
   information_quality.md coordinate_transformation.md Occlusion.md ...
 ```
 
@@ -187,13 +196,16 @@ The toolkit corrupts **data**. The benchmarks add two more surfaces:
    *No model code corrupts a tensor.*
 2. **Measurement plane** (`cpbench/observation/`) -- read-only taps at every
    intermediate tensor. *Observation cannot alter the forward pass.*
-3. **Control / protocol plane** (`lgcpbench/faults/`, `w2cbench/faults/`) --
+3. **Control / protocol plane** (`lgcpbench/faults/`, `w2cbench/faults/`,
+   `v2xvitbench/faults/`) --
    corrupts an algorithm's own *messages*, at the boundary where they are sent.
    LGCP: the RSU's decisions (confidence reports, group assignments, leader
    elections, transmission schedules, the broadcast global view). Where2comm:
-   the request maps and reported confidence its protocol runs on. *Algorithm
-   code is never fault-aware.* These failure modes have no tensor-level
-   equivalent and no sensor-level one either.
+   the request maps and reported confidence its protocol runs on. V2X-ViT: the
+   message-header metadata its robustness mechanisms consume (reported delay,
+   agent type, correction matrix). *Algorithm code is never fault-aware.*
+   These failure modes have no tensor-level equivalent and no sensor-level
+   one either.
 
 Run the tests (no dataset downloads required):
 
@@ -201,7 +213,7 @@ Run the tests (no dataset downloads required):
 pip install pytest && python -m pytest src/tests src/info_quality/tests -q
 # the benchmarks additionally need torch and einops:
 pip install -r requirements-bench.txt
-python -m pytest cpbench corabench/tests lgcpbench cobevtbench w2cbench --doctest-modules -q
+python -m pytest cpbench corabench/tests lgcpbench cobevtbench w2cbench v2xvitbench --doctest-modules -q
 ```
 
 ## Information quality (mutual information)

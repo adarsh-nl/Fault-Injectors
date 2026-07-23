@@ -1,0 +1,17 @@
+# The paper's joint noisy setting: pose error and latency together, the
+# grid its robustness figures sweep. The metadata plane stays clean here --
+# this family reproduces the paper's protocol; the delay_encoding and
+# type_flip families go where it did not.
+name: v2x_noise
+pipeline:
+  pose_error: {sigma_xy: 0.4, sigma_heading: 0.8}
+  latency: {mu_delay: 0.2, sigma_jitter: 0.05}
+agent_scope: non-ego
+sweep:
+  - {}
+  - {pipeline: {pose_error: {sigma_xy: 0.2, sigma_heading: 0.4},
+                latency: {mu_delay: 0.1, sigma_jitter: 0.02}}}
+  - {pipeline: {pose_error: {sigma_xy: 0.4, sigma_heading: 0.8},
+                latency: {mu_delay: 0.2, sigma_jitter: 0.05}}}
+  - {pipeline: {pose_error: {sigma_xy: 0.5, sigma_heading: 1.0},
+                latency: {mu_delay: 0.3, sigma_jitter: 0.05}}}

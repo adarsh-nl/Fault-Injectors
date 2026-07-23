@@ -1,0 +1,5 @@
+# Per-tensor summary statistics at every observation point, written to
+# taps.csv. Cheap enough to leave on for a whole benchmark run.
+name: stats
+stats:
+  include: null            # null = every registered location

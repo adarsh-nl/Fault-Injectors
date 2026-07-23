@@ -1,0 +1,76 @@
+# The released configuration (point_pillar_v2xvit.yaml of the reference
+# repository), translated onto this repository's shared components. Deviations
+# from the reference are the assumptions below; they are written to meta.json
+# on every run.
+name: v2xvit
+track: lidar
+
+encoder:                        # cpbench PointPillarEncoder
+  vfe_channels: 64
+  block_channels: [64, 128, 256]
+  block_strides: [2, 2, 2]
+  block_layers: [3, 5, 8]
+  upsample_channels: 128
+  out_channels: 384
+
+shrink:                         # the reference's shrink_header
+  channels: 256                 # the fusion width -- everything after this
+  stride: 2                     # fusion stride = block_strides[0] * this
+  kernel: 3
+
+compression: 0                  # NaiveCompressor factor; 0 = off (released)
+
+fusion:
+  depth: 3
+  num_blocks: 1
+  mlp_dim: 256
+  dropout: 0.3
+  hmsa:
+    heads: 8
+    dim_head: 32
+    num_types: 2                # vehicle, infrastructure
+    num_relations: 4            # ordered (receiver, sender) type pairs
+  mswin:
+    window_sizes: [4, 8, 16]
+    heads: [16, 8, 4]
+    dim_heads: [16, 32, 64]
+    relative_pos_embedding: true
+    fusion_method: split_attn   # split_attn (paper) | naive (ablation)
+  rte:
+    enabled: true
+    ratio: 2
+    max_delay: 100              # frames; larger reported delays clamp
+  use_roi_mask: true
+
+head:
+  num_anchors: 2
+  num_classes: 1
+
+loss:
+  alpha: 0.25
+  gamma: 2.0
+  cls_weight: 1.0
+  reg_weight: 2.0
+
+score_threshold: 0.27
+nms_iou: 0.15
+
+assumptions:
+  A1: "cpbench BEVBackbone adds a 1x1 out-conv over the concatenated pyramid
+       (384->384 here); the reference concatenates without it"
+  A2: "dual GridSpec: encoder grid validated at downsample=block_strides[0],
+       fusion grid (anchors/decoder/warp) at that times the shrink stride;
+       fusion depth is configurable, released value 3"
+  A3: "RTE applied before the STTF warp, per the reference ordering; MSwin
+       branch fusion is configurable, released value split_attn"
+  A4: "metadata fault plane applied post-collate in the tester, not
+       in-forward as w2cbench's protocol plane -- V2X-ViT's corruptible
+       metadata exists as batch fields, not mid-forward messages"
+  A5: "velocity read from OPV2V-format ego_speed when present, else 0;
+       synthetic scenes carry 0"
+  A6: "9-feature pillar decoration (repo convention), vs the reference's 10"
+  A7: "STTF as a continuous differentiable affine warp; the reference
+       discretises to whole feature cells"
+  A8: "dropout 0.3 active in training only; evaluation always runs eval()"
+  A9: "ego is agent slot 0 in every sample (ego-first ordering)"
+  A10: "metadata faults are evaluation-only; training never sees plane 2"

@@ -1,0 +1,14 @@
+# Sensor-level corruption of the point clouds themselves (plane 1, lidar
+# stages). Unlike the metadata families, this degrades what agents SEE, so
+# it measures the encoder-and-fusion stack rather than a specific mechanism.
+name: lidar_weather
+lidar_faults:
+  - {kind: fog, severity: 2}
+agent_scope: non-ego
+sweep:
+  - {}
+  - {lidar_faults: [{kind: fog, severity: 1}]}
+  - {lidar_faults: [{kind: fog, severity: 2}]}
+  - {lidar_faults: [{kind: snow, severity: 2}]}
+  - {lidar_faults: [{kind: points_reduction, severity: 2}]}
+  - {lidar_faults: [{kind: beam_reduction, severity: 2}]}

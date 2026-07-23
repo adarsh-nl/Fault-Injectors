@@ -79,6 +79,7 @@ class AgentFrame:
     agent_type: str = 'vehicle'          # one of AGENT_TYPES
     is_ego: bool = False
     timestamp: Optional[float] = None
+    speed: Optional[float] = None        # ego speed in m/s, if recorded
     pose: Optional[np.ndarray] = None    # (4, 4) T_agent_to_world
     lidar: Optional[np.ndarray] = None   # (N, C) in the AGENT frame
     images: Dict[str, np.ndarray] = field(default_factory=dict)

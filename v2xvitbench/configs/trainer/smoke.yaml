@@ -1,0 +1,15 @@
+# Two epochs on a handful of batches: proves the pipeline runs, nothing else.
+name: smoke
+epochs: 2
+batch_size: 2
+optimizer: adam
+lr: 1.0e-3
+weight_decay: 0.0
+scheduler: none
+grad_clip: 35.0
+amp: false
+num_workers: 0
+log_every: 1
+eval_every: 1
+checkpoint_every: 0
+max_batches: 4

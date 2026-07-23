@@ -1,0 +1,23 @@
+# Synthetic cooperative scenes from cpbench. No data needed: this is what
+# the smoke tests and the quick-start commands run on.
+#
+# force_infra marks agent slot 2 as infrastructure. Synthetic scenes have no
+# real infra agent, and without one HMSA's second projection set and three of
+# its four relation matrices would never execute in any smoke run -- a
+# type_flip smoke benchmark would silently exercise nothing.
+name: synthetic_lidar
+adapter: synthetic
+track: lidar
+fps: 10.0
+max_cav: 3
+n_frames: 16
+n_agents: 3
+n_objects: 4
+grid:
+  voxel_size: [0.8, 0.8]
+  point_range: [-25.6, -25.6, -3.0, 25.6, 25.6, 1.0]
+  downsample: 4              # 64x64 pillars -> 16x16 fused cells
+max_points_per_pillar: 32
+max_pillars: 8000
+categories: null
+force_infra: [2]

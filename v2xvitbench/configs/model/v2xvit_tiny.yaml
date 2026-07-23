@@ -1,0 +1,58 @@
+# Structurally identical to v2xvit at a fraction of the width and depth --
+# sized for the 16x16 synthetic fused grid on CPU. This is what the smoke
+# commands and the unit tests run; it proves plumbing, never performance.
+name: v2xvit_tiny
+track: lidar
+
+encoder:
+  vfe_channels: 32
+  block_channels: [32, 64, 96]
+  block_strides: [2, 2, 2]
+  block_layers: [1, 1, 1]
+  upsample_channels: 32
+  out_channels: 96
+
+shrink:
+  channels: 64
+  stride: 2
+  kernel: 3
+
+compression: 0
+
+fusion:
+  depth: 2
+  num_blocks: 1
+  mlp_dim: 64
+  dropout: 0.0
+  hmsa:
+    heads: 2
+    dim_head: 32
+    num_types: 2
+    num_relations: 4
+  mswin:
+    window_sizes: [2, 4]
+    heads: [2, 2]
+    dim_heads: [16, 32]
+    relative_pos_embedding: true
+    fusion_method: split_attn
+  rte:
+    enabled: true
+    ratio: 2
+    max_delay: 20
+  use_roi_mask: true
+
+head:
+  num_anchors: 2
+  num_classes: 1
+
+loss:
+  alpha: 0.25
+  gamma: 2.0
+  cls_weight: 1.0
+  reg_weight: 2.0
+
+score_threshold: 0.27
+nms_iou: 0.15
+
+assumptions:
+  A0: "tiny profile for smoke tests; inherits every v2xvit assumption"

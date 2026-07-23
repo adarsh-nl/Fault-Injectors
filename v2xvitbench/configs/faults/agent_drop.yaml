@@ -1,0 +1,11 @@
+# A collaborator's whole message fails to arrive. HMSA's mask removes the
+# agent from every softmax; measures how gracefully fusion degrades toward
+# single-vehicle perception.
+name: agent_drop
+pipeline: {agent_drop: {p_drop: 0.25}}
+agent_scope: non-ego
+sweep:
+  - {}
+  - {pipeline: {agent_drop: {p_drop: 0.25}}}
+  - {pipeline: {agent_drop: {p_drop: 0.5}}}
+  - {pipeline: {agent_drop: {p_drop: 0.75}}}

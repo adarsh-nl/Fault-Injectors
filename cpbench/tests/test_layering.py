@@ -20,7 +20,8 @@ import pathlib
 from typing import Iterator, Set, Tuple
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
-PAPER_PACKAGES = ("corabench", "lgcpbench", "cobevtbench", "w2cbench")
+PAPER_PACKAGES = ("corabench", "lgcpbench", "cobevtbench", "w2cbench",
+                  "v2xvitbench")
 
 
 def _imports(path: pathlib.Path) -> Iterator[str]:
@@ -174,5 +175,9 @@ def test_every_package_is_importable() -> None:
         "w2cbench", "w2cbench.observation", "w2cbench.models",
         "w2cbench.comm", "w2cbench.fusion", "w2cbench.data",
         "w2cbench.training", "w2cbench.evaluation", "w2cbench.faults", "w2cbench.scripts", "cpbench.training",
+        "v2xvitbench", "v2xvitbench.observation", "v2xvitbench.models",
+        "v2xvitbench.fusion", "v2xvitbench.data", "v2xvitbench.faults",
+        "v2xvitbench.training", "v2xvitbench.evaluation",
+        "v2xvitbench.scripts",
     ):
         importlib.import_module(name)

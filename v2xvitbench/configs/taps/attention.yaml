@@ -1,0 +1,18 @@
+# The two tensors the benchmark exists to observe, dumped as arrays for
+# offline analysis, plus statistics over the whole fusion stack.
+#
+#   fusion/l*/hmsa/softmax   who the ego trusts, per cell per head --
+#                            does attention down-weight a misrouted or
+#                            stale collaborator?
+#   fusion/l*/mswin/weights  which spatial range wins per channel -- does
+#                            localisation error shift weight to the coarser
+#                            branches?
+#   rte/embedding            what the model believes about staleness
+name: attention
+stats:
+  include: ["fusion/*", "rte/*", "sttf/*"]
+dump:
+  include: ["fusion/l*/hmsa/softmax", "fusion/l*/mswin/weights",
+            "rte/embedding"]
+  every_n: 10
+  max_dumps: 60
