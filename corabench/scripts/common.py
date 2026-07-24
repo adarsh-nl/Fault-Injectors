@@ -60,8 +60,18 @@ def build_adapters(ds_cfg: Dict[str, Any],
             n_objects=int(ds_cfg.get("n_objects", 4)),
             seed=seed)]
     root = Path(ds_cfg["root"])
+    if not root.is_dir():
+        raise FileNotFoundError(
+            f"dataset root {root} does not exist on this machine. The value "
+            f"in configs/dataset/{ds_cfg['name']}.yaml is a placeholder -- "
+            f"override it: dataset.root=/path/to/your/{adapter} "
+            f"(on the UT HPC the data is read-only under /deepstore/datasets)")
     if adapter in ("opv2v", "v2xset"):
         split_dir = root / split if split else root
+        if not split_dir.is_dir():
+            raise FileNotFoundError(
+                f"split directory {split_dir} not found under dataset root "
+                f"{root}; check dataset.train_split / dataset.test_split")
         wanted = ds_cfg.get("scenarios")
         scen_dirs = sorted(p for p in split_dir.iterdir() if p.is_dir())
         if wanted:

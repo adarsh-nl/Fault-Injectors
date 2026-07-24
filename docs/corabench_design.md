@@ -463,7 +463,7 @@ amp: true
 grad_clip: 10.0
 val_every: 1
 checkpoint: {keep_last: 3, keep_best: true, metric: ap70}
-train_noise: {pose_error: {sigma_xy: 0.2, sigma_heading: 0.2}}   # robust training, ablatable
+train_noise: null   # default trains CLEAN; trainer=robust enables pose-noise training
 comm_range_m: 70
 ```
 
@@ -488,8 +488,8 @@ for epoch:
 
 - Teacher branch and L_align exist only when `model.teacher.enabled` and
   `self.training` — zero inference cost.
-- Fault-aware training (pose noise) is the paper's implicit setting for robust
-  models; ablatable via `trainer.train_noise=null`.
+- Training is CLEAN by default (the clean baseline must be clean);
+  pose-noise-robust training is the `trainer=robust` config group.
 
 ## 9. Evaluation flow
 
