@@ -19,6 +19,15 @@ cumulative-sum closed form inside fixed-size chunks with a carried hidden
 state between chunks (numerically bounded; no Python loop over timesteps).
 Backend 'cuda' delegates to `mamba-ssm`'s fused kernel when installed.
 
+PRECISION: the reference scan is run in float32 with autocast explicitly
+disabled, even when the surrounding model is in AMP. The closed form divides
+by the decay term E, whose exponent is clamped at -30, so the intermediate
+`b / E` reaches ~1e13. float16 tops out at 65504, so under autocast that
+intermediate overflows to inf, f_out becomes inf, the distillation loss
+explodes and GradScaler then skips every step -- a failure that presents as
+"the model does not learn" rather than as a crash. Casting back to the
+caller's dtype at the boundary keeps the rest of the model in AMP.
+
 2-D scanning: 'cross2d' (VMamba-style: 4 directions -- row-major, reversed,
 column-major, reversed -- averaged; assumption A9) or 'raster' (single pass).
 
@@ -171,13 +180,17 @@ class CSSM(nn.Module):
         for direction in directions:
             xs = self._flatten(x, direction)                     # (B, L, D)
             es = self._flatten(e, direction)
-            delta = F.softplus(self.dt_proj(xs))
-            if direction == 0:
-                emit(taps, delta, module="CSSM", location="lc/ssm_delta")
-            y = _chunked_selective_scan(
-                xs, delta, A, self.b_proj(xs), self.c_proj(es), self.chunk)
-            y = y + self.d_skip * xs
-            y2d = self._unflatten(y, direction, (hp, wp))
+            # float32 island: see the PRECISION note in the module docstring.
+            with torch.autocast(device_type=xs.device.type, enabled=False):
+                xs32, es32 = xs.float(), es.float()
+                delta = F.softplus(self.dt_proj(xs32))
+                if direction == 0:
+                    emit(taps, delta, module="CSSM", location="lc/ssm_delta")
+                y = _chunked_selective_scan(
+                    xs32, delta, A.float(), self.b_proj(xs32),
+                    self.c_proj(es32), self.chunk)
+                y = y + self.d_skip.float() * xs32
+            y2d = self._unflatten(y.to(xs.dtype), direction, (hp, wp))
             out = y2d if out is None else out + y2d
         out = out / len(directions)
 

@@ -8,7 +8,7 @@ n_objects: 4
 fps: 10.0
 grid:
   voxel_size: [0.4, 0.4]
-  point_range: [-20.0, -20.0, -3.0, 20.0, 20.0, 1.0]
+  point_range: [-19.2, -19.2, -3.0, 19.2, 19.2, 1.0]
   downsample: 2
 max_points_per_pillar: 16
 max_pillars: 4000

@@ -37,18 +37,50 @@ def test_lc_forward_and_grad():
     assert torch.isfinite(f.grad).all()
 
 
-def test_teacher_shares_weights_and_align_loss():
+def test_teacher_ema_and_align_loss():
+    """The teacher must NOT share weight tensors with the student.
+
+    Sharing makes L_align self-referential -- the loss detaches the teacher
+    output, so the gradient treats the target as fixed while the shared
+    weights move both -- and it diverges (measured: align 0.0068 -> 4.9e16
+    over 15 epochs in float32). The teacher therefore holds an EMA copy.
+    """
     lc = _lc()
     teacher = TeacherBranch(lc)
-    assert teacher.lc is lc                    # shared, not copied
+    assert teacher.lc is not lc                        # EMA copy, not shared
+    assert not any(p.requires_grad for p in teacher.lc.parameters())
     f_ego = torch.rand(2, 16, 8, 8)
     s_ego = torch.rand(2, 1, 8, 8)
-    feats = [[torch.rand(16, 8, 8)], []]       # frame 1: no collaborators
+    feats = [[torch.rand(16, 8, 8)], []]               # frame 1: no collaborators
     confs = [[torch.rand(1, 8, 8)], []]
     ft = teacher(f_ego, feats, confs, s_ego)
     assert ft.shape == (2, 16, 8, 8)
     loss = align_loss(torch.rand(2, 16, 8, 8, requires_grad=True), ft)
     assert loss.item() >= 0
+
+
+def test_teacher_ema_tracks_student_without_aliasing():
+    """update_ema moves the teacher a (1 - m) fraction toward the student."""
+    lc = _lc()
+    teacher = TeacherBranch(lc, momentum=0.5)
+    ps = next(iter(lc.parameters()))
+    pt = next(iter(teacher.lc.parameters()))
+    start = pt.detach().clone()
+    with torch.no_grad():
+        ps.add_(1.0)                                   # move the student only
+    assert torch.allclose(pt, start)                   # teacher unmoved: no alias
+    teacher.update_ema()
+    assert torch.allclose(pt, 0.5 * start + 0.5 * ps.detach())
+
+
+def test_teacher_params_excluded_from_student_optimiser():
+    """The EMA copy must not be optimised, and must not double-count params."""
+    lc = _lc()
+    teacher = TeacherBranch(lc)
+    trainable = [p for p in teacher.parameters() if p.requires_grad]
+    assert trainable == []                             # nothing to optimise
+    assert all(p is not q for p in teacher.lc.parameters()
+               for q in lc.parameters())               # no shared storage
 
 
 def _pac(grid):
