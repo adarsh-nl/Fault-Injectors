@@ -86,7 +86,9 @@ class OPV2VDataset(BaseDataset):
     Parameters
     ----------
     scenario_dir : path to one scenario folder (contains cav_id subfolders).
-    ego_id       : override the default ego (smallest cav id), as a string.
+    ego_id       : override the default ego, as a string. Default: the first
+                   CAV in OpenCOOD's string-sorted folder order (roadside
+                   units, i.e. negative ids, are never the default ego).
     max_cams     : number of cameras per agent to expose (default 4).
     """
 
@@ -97,10 +99,20 @@ class OPV2VDataset(BaseDataset):
         self.scenario_dir = scenario_dir
         self.max_cams = max_cams
 
+        # OpenCOOD convention: CAV folder names are sorted as STRINGS and the
+        # first entry is the default ego. Sorting numerically here would pick
+        # a different ego whenever ids have different digit counts (e.g.
+        # '1045' vs '650'), silently changing the viewpoint of every frame
+        # and making results incomparable with published OPV2V numbers.
         cav_dirs = sorted(
             (d for d in glob.glob(os.path.join(scenario_dir, '*'))
              if os.path.isdir(d) and _is_int(os.path.basename(d))),
-            key=lambda d: int(os.path.basename(d)))
+            key=lambda d: os.path.basename(d))
+        # V2X-ViT convention on top: negative ids are roadside units; they
+        # sort first as strings ('-' < '0') but must never be the ego, so
+        # they move to the END of the agent list.
+        cav_dirs = ([d for d in cav_dirs if int(os.path.basename(d)) >= 0] +
+                    [d for d in cav_dirs if int(os.path.basename(d)) < 0])
         if not cav_dirs:
             raise FileNotFoundError(
                 f'no numeric CAV folders under {scenario_dir!r} -- expected '
