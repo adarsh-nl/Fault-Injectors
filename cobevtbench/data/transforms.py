@@ -18,8 +18,8 @@ keeps working unchanged.
 from __future__ import annotations
 
 from cpbench.data.samples import (EMPTY_BOXES, agent_to_ego_matrix,
-                                  labels_to_array, ordered_agent_ids,
-                                  world_to_ego_matrix)
+                                  cooperative_gt_boxes, labels_to_array,
+                                  ordered_agent_ids, world_to_ego_matrix)
 
 __all__ = ["labels_to_array", "world_to_ego_matrix", "agent_to_ego_matrix",
-           "ordered_agent_ids", "EMPTY_BOXES"]
+           "ordered_agent_ids", "cooperative_gt_boxes", "EMPTY_BOXES"]

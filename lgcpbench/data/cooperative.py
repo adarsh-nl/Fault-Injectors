@@ -43,6 +43,7 @@ import numpy as np
 import torch
 
 from cpbench.data.preprocessing import GridSpec, PillarVoxelizer
+from cpbench.data.samples import cooperative_gt_boxes
 from cpbench.faults.bridge import DataFaultBridge, FaultRecord
 from src.datasets.base import BaseDataset, Box3D
 
@@ -53,29 +54,10 @@ from .opencood_voxelizer import OpenCOODVoxelizer
 logger = logging.getLogger(__name__)
 
 
-def _boxes_from_labels(
-    labels: Sequence[Box3D],
-    T_world_to_ego: np.ndarray,
-    categories: Optional[Sequence[str]] = None,
-) -> np.ndarray:
-    """Ground-truth boxes in the ego frame, (G, 7) [x, y, z, l, w, h, yaw]."""
-    keep = [
-        b for b in labels
-        if categories is None or b.category in categories
-    ]
-    if not keep:
-        return np.zeros((0, 7), dtype=np.float32)
-
-    centres = np.stack([np.asarray(b.center, dtype=np.float64) for b in keep])
-    homo = np.concatenate([centres, np.ones((len(keep), 1))], axis=1)
-    local = (T_world_to_ego @ homo.T).T[:, :3]
-
-    boxes = np.zeros((len(keep), 7), dtype=np.float32)
-    boxes[:, :3] = local
-    boxes[:, 3:6] = np.stack([np.asarray(b.size, dtype=np.float64) for b in keep])
-    yaw_offset = np.arctan2(T_world_to_ego[1, 0], T_world_to_ego[0, 0])
-    boxes[:, 6] = [np.deg2rad(float(b.yaw)) + yaw_offset for b in keep]
-    return boxes
+# Ground truth is built by `cpbench.data.samples.cooperative_gt_boxes`: it
+# merges the labels of EVERY agent from a freshly loaded CLEAN sample, so
+# cooperation is rewarded (collaborator-revealed objects are in the answer
+# key) and fault injection can never corrupt the ground truth.
 
 
 class LGCPDataset:
@@ -124,9 +106,11 @@ class LGCPDataset:
         categories: Optional[Sequence[str]] = None,
         feature_backend: str = "native",
         opencood_voxelizer: Optional["OpenCOODVoxelizer"] = None,
+        gt_mode: str = "merge",
     ) -> None:
         self.adapter = adapter
         self.grid = grid
+        self.gt_mode = gt_mode
         self.bridge = bridge or DataFaultBridge(
             None, fps=getattr(adapter, "fps", 10.0)
         )
@@ -208,7 +192,9 @@ class LGCPDataset:
         frame = FrameInput(
             index=int(k),
             agents=agents,
-            gt_boxes=_boxes_from_labels(ego.labels, T_world_to_ego, self.categories),
+            gt_boxes=cooperative_gt_boxes(
+                self.adapter, k, categories=self.categories,
+                point_range=self.grid.point_range, mode=self.gt_mode),
         )
         return frame, self.bridge.drain_records()
 

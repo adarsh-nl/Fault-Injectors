@@ -27,32 +27,21 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-from src.datasets.base import BaseDataset, Box3D
+from src.datasets.base import BaseDataset
 
 from cpbench.faults.bridge import DataFaultBridge
+from cpbench.data.samples import cooperative_gt_boxes
 from cpbench.data.preprocessing import (AnchorGenerator, GridSpec, PillarVoxelizer,
                             TargetAssigner)
 
 logger = logging.getLogger(__name__)
 
 
-def _boxes_from_labels(labels: Sequence[Box3D], T_world_to_ego: np.ndarray,
-                       categories: Optional[Sequence[str]] = None
-                       ) -> np.ndarray:
-    """`src.datasets.Box3D` list -> (G, 7) [x,y,z,l,w,h,yaw(rad)] ego frame."""
-    rows: List[List[float]] = []
-    for box in labels:
-        if categories and box.category and box.category not in categories:
-            continue
-        cx, cy, cz = [float(v) for v in np.asarray(box.center).ravel()[:3]]
-        l, w, h = [float(v) for v in np.asarray(box.size).ravel()[:3]]
-        yaw = float(np.radians(box.yaw))
-        if box.frame == "world":
-            pt = T_world_to_ego @ np.array([cx, cy, cz, 1.0])
-            cx, cy, cz = pt[:3]
-            yaw += float(np.arctan2(T_world_to_ego[1, 0], T_world_to_ego[0, 0]))
-        rows.append([cx, cy, cz, l, w, h, yaw])
-    return np.asarray(rows, dtype=np.float32).reshape(-1, 7)
+# Ground truth comes from `cpbench.data.samples.cooperative_gt_boxes`: the
+# labels of EVERY agent, merged and deduplicated from a freshly loaded CLEAN
+# sample. Scoring against the ego's own labels alone would punish exactly
+# the cooperative detections CoRA exists to enable, and would let pose
+# faults corrupt the answer key.
 
 
 class CoRADataset(Dataset):
@@ -88,7 +77,9 @@ class CoRADataset(Dataset):
                  target_assigner: Optional[TargetAssigner] = None,
                  max_points_per_pillar: int = 32, max_pillars: int = 20000,
                  max_agents: int = 5, comm_range_m: float = 70.0,
-                 categories: Optional[Sequence[str]] = None) -> None:
+                 categories: Optional[Sequence[str]] = None,
+                 gt_mode: str = "merge") -> None:
+        self.gt_mode = gt_mode
         self.adapter = adapter
         self.grid = grid
         self.bridge = bridge or DataFaultBridge(None, fps=getattr(adapter, "fps", 10.0))
@@ -107,7 +98,6 @@ class CoRADataset(Dataset):
         ego = sample.ego
         if ego.pose is None:
             raise ValueError(f"frame {k}: ego agent {sample.ego_id!r} has no pose")
-        T_world_to_ego = np.linalg.inv(ego.pose)
 
         # order: ego first, then collaborators within comm range
         agent_ids = [sample.ego_id]
@@ -129,8 +119,9 @@ class CoRADataset(Dataset):
             pillars.append(self.voxelizer(
                 pts if pts is not None else np.zeros((0, 4), dtype=np.float32)))
 
-        gt_boxes = _boxes_from_labels(ego.labels, T_world_to_ego,
-                                      self.categories)
+        gt_boxes = cooperative_gt_boxes(
+            self.adapter, k, categories=self.categories,
+            point_range=self.grid.point_range, mode=self.gt_mode)
         targets = self.target_assigner(gt_boxes)
         return {
             "pillars": pillars,

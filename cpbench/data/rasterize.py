@@ -89,6 +89,19 @@ class BEVGrid:
         """(height, width)."""
         return (self.height, self.width)
 
+    @property
+    def point_range(self) -> "tuple":
+        """Ego-frame extent as ``(xmin, ymin, zmin, xmax, ymax, zmax)``.
+
+        The exact x/y area :meth:`world_to_pixel` maps onto the raster
+        (``offset`` shifts the x window). The z bounds are nominal (+-10 m):
+        BEV rasters have no vertical extent, and consumers such as
+        ``cooperative_gt_boxes`` crop on x/y only.
+        """
+        x_shift = self.h_meters * self.offset
+        return (x_shift - self.h_meters / 2.0, -self.w_meters / 2.0, -10.0,
+                x_shift + self.h_meters / 2.0, self.w_meters / 2.0, 10.0)
+
     def world_to_pixel(self, xy: np.ndarray) -> np.ndarray:
         """Ego-frame metres ``(..., 2)`` [x, y] -> pixel ``(..., 2)`` [row, col].
 

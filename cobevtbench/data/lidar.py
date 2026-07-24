@@ -29,7 +29,7 @@ from torch.utils.data import Dataset
 from cpbench.data import GridSpec, PillarVoxelizer
 from cpbench.faults import DataFaultBridge
 
-from .transforms import (agent_to_ego_matrix, labels_to_array,
+from .transforms import (agent_to_ego_matrix, cooperative_gt_boxes,
                          ordered_agent_ids, world_to_ego_matrix)
 
 logger = logging.getLogger(__name__)
@@ -77,7 +77,9 @@ class CoBEVTLidarDataset(Dataset):
                  bridge: Optional[DataFaultBridge] = None,
                  categories: Optional[Sequence[str]] = None,
                  max_points_per_pillar: int = 32,
-                 max_pillars: int = 20000) -> None:
+                 max_pillars: int = 20000,
+                 gt_mode: str = "merge") -> None:
+        self.gt_mode = gt_mode
         self.adapter = adapter
         self.grid = grid
         self.max_cav = int(max_cav)
@@ -116,8 +118,10 @@ class CoBEVTLidarDataset(Dataset):
             coords.append(torch.cat([agent_column, pillars["coords"]], dim=1))
             transforms.append(agent_to_ego_matrix(sample, agent_id))
 
-        boxes = labels_to_array(sample.ego.labels, world_to_ego_matrix(sample),
-                                self.categories)
+        boxes = cooperative_gt_boxes(self.adapter, index,
+                                     categories=self.categories,
+                                     point_range=self.grid.point_range,
+                                     mode=self.gt_mode)
 
         return {
             "features": torch.cat(features) if features

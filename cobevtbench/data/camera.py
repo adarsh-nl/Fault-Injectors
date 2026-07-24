@@ -23,7 +23,7 @@ from torch.utils.data import Dataset
 from cpbench.data import BEVGrid, BEVRasterizer
 from cpbench.faults import DataFaultBridge
 
-from .transforms import (agent_to_ego_matrix, labels_to_array,
+from .transforms import (agent_to_ego_matrix, cooperative_gt_boxes,
                          ordered_agent_ids, world_to_ego_matrix)
 
 logger = logging.getLogger(__name__)
@@ -86,9 +86,11 @@ class CoBEVTCameraDataset(Dataset):
                  bridge: Optional[DataFaultBridge] = None,
                  target: str = "dynamic",
                  camera_names: Optional[Sequence[str]] = None,
-                 categories: Optional[Sequence[str]] = None) -> None:
+                 categories: Optional[Sequence[str]] = None,
+                 gt_mode: str = "merge") -> None:
         self.adapter = adapter
         self.bev_grid = bev_grid
+        self.gt_mode = gt_mode
         self.max_cav = int(max_cav)
         self.target = target
         self.camera_names = list(camera_names) if camera_names else None
@@ -152,8 +154,10 @@ class CoBEVTCameraDataset(Dataset):
             extrinsics.append(T_cam)
             transforms.append(agent_to_ego_matrix(sample, agent_id))
 
-        boxes = labels_to_array(sample.ego.labels, world_to_ego_matrix(sample),
-                                self.categories)
+        boxes = cooperative_gt_boxes(self.adapter, index,
+                                     categories=self.categories,
+                                     point_range=self.bev_grid.point_range,
+                                     mode=self.gt_mode)
         target = self.rasterizer.rasterize(boxes)
 
         return {

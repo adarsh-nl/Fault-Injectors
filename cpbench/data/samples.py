@@ -106,3 +106,86 @@ def ordered_agent_ids(sample, max_cav: Optional[int] = None) -> list:
     others = sorted(a for a in sample.agents if a != sample.ego_id)
     ids = [sample.ego_id] + others
     return ids[:max_cav] if max_cav is not None else ids
+
+
+def cooperative_gt_boxes(adapter, k: int, *, categories=None,
+                         point_range=None, mode: str = "merge",
+                         dedup_iou: float = 0.5) -> np.ndarray:
+    """The answer key for ego frame ``k``: merged multi-agent ground truth.
+
+    Scoring against the ego's own label file alone punishes cooperation: a
+    collaborator-revealed object that the model correctly detects would be
+    counted as a false positive because it is missing from the key. This
+    builder therefore merges the labels of EVERY agent in the scene -- the
+    OpenCOOD evaluation convention -- and it does so from a freshly loaded
+    CLEAN sample, so fault injection (pose noise, latency, dropout) can
+    never corrupt the ground truth it is being measured against.
+
+    Inputs
+    ------
+    adapter      a ``src.datasets.BaseDataset`` (NOT a corrupted sample).
+    k            ego frame index.
+    categories   keep only these Box3D categories (None = all).
+    point_range  ``(xmin, ymin, zmin, xmax, ymax, zmax)``: boxes whose centre
+                 falls outside the x/y bounds are dropped, matching the
+                 model's detection range (otherwise out-of-range objects
+                 inflate the false-negative count of every model).
+    mode         ``"merge"`` (all agents, deduplicated -- default) or
+                 ``"ego"`` (ego labels only; the pre-fix behaviour, kept for
+                 comparison studies).
+    dedup_iou    two boxes closer than this BEV IoU are one object.
+
+    Output: ``(G, 7)`` float32 ego-frame boxes, yaw in radians.
+
+    Deduplication uses ``track_id`` when present (OPV2V ids are global CARLA
+    actor ids, so identical ids across agents ARE the same object) and falls
+    back to BEV IoU for id-less or cross-source labels (e.g. DAIR-V2X, where
+    vehicle- and infrastructure-side ids are independent).
+    """
+    from ..utils import rotated_iou_bev
+
+    if mode not in ("merge", "ego"):
+        raise ValueError(f"mode must be 'merge'|'ego', got {mode!r}")
+    sample = adapter.get_sample(k, load=("labels",))
+    if sample.ego.pose is None:
+        raise ValueError(f"frame {k}: ego agent {sample.ego_id!r} has no pose")
+    T_we = np.linalg.inv(sample.ego.pose)
+
+    order = [sample.ego_id] if mode == "ego" else ordered_agent_ids(sample)
+    kept_rows: list = []
+    seen_ids: set = set()
+    for aid in order:
+        agent = sample.agents[aid]
+        T_ae = (T_we @ agent.pose) if (aid != sample.ego_id
+                                       and agent.pose is not None) else None
+        for box in agent.labels:
+            if categories is not None and box.category not in categories:
+                continue
+            row = np.array([[float(box.center[0]), float(box.center[1]),
+                             float(box.center[2]), float(box.size[0]),
+                             float(box.size[1]), float(box.size[2]),
+                             float(np.radians(box.yaw))]])
+            if box.frame == "world":
+                row = transform_boxes(row, T_we)
+            elif aid != sample.ego_id:
+                if T_ae is None:
+                    continue              # agent-frame box, no pose to place it
+                row = transform_boxes(row, T_ae)
+            if point_range is not None:
+                xmin, ymin, _, xmax, ymax, _ = point_range
+                if not (xmin <= row[0, 0] < xmax and ymin <= row[0, 1] < ymax):
+                    continue
+            tid = str(getattr(box, "track_id", "") or "")
+            if tid and tid in seen_ids:
+                continue
+            # IoU dedup runs even for tracked boxes: cross-source labels
+            # (vehicle vs infrastructure side) carry independent ids
+            if kept_rows and rotated_iou_bev(
+                    row, np.asarray(kept_rows)).max() >= dedup_iou:
+                continue
+            if tid:
+                seen_ids.add(tid)
+            kept_rows.append(row[0])
+    if not kept_rows:
+        return EMPTY_BOXES.copy()
+    return np.asarray(kept_rows, dtype=np.float32).reshape(-1, 7)

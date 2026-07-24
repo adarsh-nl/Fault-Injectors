@@ -39,8 +39,8 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-from cpbench.data import (GridSpec, agent_to_ego_matrix, labels_to_array,
-                          ordered_agent_ids, world_to_ego_matrix)
+from cpbench.data import (GridSpec, agent_to_ego_matrix, cooperative_gt_boxes,
+                          ordered_agent_ids)
 from cpbench.faults import DataFaultBridge
 
 logger = logging.getLogger(__name__)
@@ -94,12 +94,14 @@ class W2CCameraDataset(Dataset):
     def __init__(self, adapter, grid: GridSpec, max_cav: int = 5,
                  bridge: Optional[DataFaultBridge] = None,
                  camera_names: Optional[Sequence[str]] = None,
-                 categories: Optional[Sequence[str]] = None) -> None:
+                 categories: Optional[Sequence[str]] = None,
+                 gt_mode: str = "merge") -> None:
         self.adapter = adapter
         self.grid = grid
         self.max_cav = int(max_cav)
         self.camera_names = list(camera_names) if camera_names else None
         self.categories = tuple(categories) if categories else None
+        self.gt_mode = gt_mode
         self.bridge = bridge or DataFaultBridge(
             None, fps=getattr(adapter, "fps", 10.0))
 
@@ -152,8 +154,10 @@ class W2CCameraDataset(Dataset):
             extrinsics.append(e)
             transforms.append(agent_to_ego_matrix(sample, agent_id))
 
-        boxes = labels_to_array(sample.ego.labels, world_to_ego_matrix(sample),
-                                self.categories)
+        boxes = cooperative_gt_boxes(self.adapter, index,
+                                     categories=self.categories,
+                                     point_range=self.grid.point_range,
+                                     mode=self.gt_mode)
         return {
             "images": torch.from_numpy(np.stack(images)),
             "intrinsics": torch.from_numpy(np.stack(intrinsics)),
