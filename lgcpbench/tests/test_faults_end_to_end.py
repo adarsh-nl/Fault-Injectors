@@ -358,9 +358,17 @@ def test_pose_error_pushes_frames_past_the_deadline(pipeline, adapter, spec) -> 
     it pushes a quarter of frames past T = 100 ms while the clean run meets
     it every time -- a deadline failure caused purely by upstream sensor
     corruption, with no fault-aware code in the scheduler.
+
+    Uses a stronger sigma than the shared POSE_ERROR condition: whether the
+    schedule crosses the fixed 100 ms deadline depends on the exact noise
+    draw, and the bridge's per-frame deterministic reseeding (a pure
+    function of seed and frame, so dataloader workers cannot replay one
+    RNG stream) changed the draws the old sigma was tuned to.
     """
+    strong = {"pipeline": {"pose_error": {"sigma_xy": 2.5,
+                                          "sigma_heading": 8.0}}}
     clean = LGCPEvaluator(pipeline).run(_dataset(adapter, spec))
-    faulted = LGCPEvaluator(pipeline).run(_dataset(adapter, spec, POSE_ERROR, seed=1))
+    faulted = LGCPEvaluator(pipeline).run(_dataset(adapter, spec, strong, seed=1))
     assert clean.system["latency_deadline_violation_rate"] == 0.0
     assert faulted.system["latency_deadline_violation_rate"] > 0.0
     assert (

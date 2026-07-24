@@ -41,6 +41,8 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+import numpy as np
+
 from src.pipeline import FaultPipeline
 
 logger = logging.getLogger(__name__)
@@ -117,6 +119,7 @@ class DataFaultBridge:
             raise ValueError(f"unknown fault-bridge config keys: {sorted(config)}")
 
         self.pipeline_cfg = dict(pipeline_cfg)
+        self._fps = float(fps)
         if pipeline_cfg or image_stages or lidar_stages:
             self.pipeline: Optional[FaultPipeline] = FaultPipeline.from_config(
                 dict(pipeline_cfg), fps=fps, seed=self.seed,
@@ -134,6 +137,43 @@ class DataFaultBridge:
     def is_clean(self) -> bool:
         return self.pipeline is None
 
+    def _reseed_for_frame(self, k: int) -> None:
+        """Reseed every injector RNG in place from (bridge seed, frame k).
+
+        Every fault draw thereby becomes a pure function of the bridge seed,
+        the ego frame index and the injector's slot in the pipeline. Without
+        this, forked dataloader workers all inherit ONE injector RNG state
+        and replay the identical noise sequence, and the noise a frame
+        receives depends on which worker happened to process it -- neither
+        reproducible nor independent.
+
+        Reseeding happens IN PLACE on `self.pipeline` (rather than
+        rebuilding it) because bench fault registries legitimately attach
+        extra stages -- calibration, camera dropout -- to the pipeline after
+        construction, or replace a clean bridge's pipeline entirely; a
+        rebuild would silently drop those. Injectors are recognised by their
+        ``rng`` / ``_rng`` attribute (the `src.fault_injectors` convention);
+        stages without one are deterministic or manage their own seeding.
+
+        Trade-off, documented: injector state cannot persist across frames
+        (e.g. Gilbert-Elliott burst dropout re-draws its channel state each
+        frame; per-frame draws -- pose error, latency delay, Bernoulli drop,
+        bandwidth, calibration -- are unaffected).
+        """
+        if self.pipeline is None:
+            return
+        stages = ([self.pipeline.latency] + list(self.pipeline.sample_stages)
+                  + list(self.pipeline.image_stages)
+                  + list(self.pipeline.lidar_stages))
+        for slot, stage in enumerate(stages):
+            if stage is None:
+                continue
+            seed = np.random.SeedSequence([self.seed, int(k), slot])
+            if hasattr(stage, "rng"):
+                stage.rng = np.random.default_rng(seed)
+            elif hasattr(stage, "_rng"):
+                stage._rng = np.random.default_rng(seed)
+
     # -- corruption entry points (delegate to src.pipeline) -----------------
 
     def load(self, dataset, k: int,
@@ -142,6 +182,7 @@ class DataFaultBridge:
         if self.pipeline is None:
             sample = dataset.get_sample(k, load=load)
         else:
+            self._reseed_for_frame(k)
             sample = self.pipeline.apply(dataset, k, load=load)
         self._harvest(sample)
         return sample
@@ -149,6 +190,7 @@ class DataFaultBridge:
     def apply_to_sample(self, sample):
         """Corrupt an already-loaded CooperativeSample (no latency stage)."""
         if self.pipeline is not None:
+            self._reseed_for_frame(int(getattr(sample, "frame_index", 0) or 0))
             sample = self.pipeline.apply_to_sample(sample)
         self._harvest(sample)
         return sample
