@@ -1,0 +1,17 @@
+2026-07-25 00:21:33,180 INFO cpbench.logbook.env: seeded everything with 2026 (deterministic=True)
+2026-07-25 00:21:34,372 INFO cpbench.logbook.experiment: experiment cora_opv2v_clean_train_20260725_002133_b8303f45 -> /home/nanjaiyalathaa/cora-dryrun/cora_opv2v_clean_train
+2026-07-25 00:21:34,372 INFO cpbench.faults.bridge: DataFaultBridge(name=faults, scope=non-ego, seed=2026, pipeline=clean)
+2026-07-25 00:21:34,388 INFO cpbench.logbook.experiment: experiment closed: /home/nanjaiyalathaa/cora-dryrun/cora_opv2v_clean_train
+Traceback (most recent call last):
+  File "<frozen runpy>", line 203, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/home/nanjaiyalathaa/Fault-Injectors/corabench/scripts/train.py", line 74, in <module>
+    main()
+    ~~~~^^
+  File "/home/nanjaiyalathaa/Fault-Injectors/corabench/scripts/train.py", line 55, in main
+    ds_cfg, grid, build_adapters(ds_cfg, ds_cfg.get("train_split")),
+                  ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/nanjaiyalathaa/Fault-Injectors/corabench/scripts/common.py", line 80, in build_adapters
+    raise FileNotFoundError(f"no scenario dirs under {split_dir}")
+FileNotFoundError: no scenario dirs under /datasets/eemcs/ps/cv/opencood/opv2v/train
+srun: error: hpc-node04: task 0: Exited with exit code 1

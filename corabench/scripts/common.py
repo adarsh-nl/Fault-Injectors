@@ -77,7 +77,12 @@ def build_adapters(ds_cfg: Dict[str, Any],
         if wanted:
             scen_dirs = [p for p in scen_dirs if p.name in set(wanted)]
         if not scen_dirs:
-            raise FileNotFoundError(f"no scenario dirs under {split_dir}")
+            raise FileNotFoundError(
+            f"no scenario dirs under {split_dir}. If you passed "
+            f"dataset.scenarios explicitly, note that YAML 1.1 reads "
+            f"underscores as digit separators, so [2021_08_16_22_26_54] "
+            f"parses as the integer 20210816222654 rather than the "
+            f"directory name. Quote it: dataset.scenarios='[\"NAME\"]'.")
         return [load_dataset(adapter, scenario_dir=str(p)) for p in scen_dirs]
     if adapter == "dair-v2x":
         return [load_dataset(adapter, root=str(root))]

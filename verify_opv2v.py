@@ -64,9 +64,16 @@ def opencood_ego(cav_ids: list[str]) -> str:
     return lst[0]
 
 
-def adapter_ego(cav_ids: list[str]) -> str:
-    """src/datasets/opv2v.py: numeric sort, first element."""
-    return sorted(cav_ids, key=int)[0]
+def adapter_ego(scenario_dir) -> str:
+    """Ask the REAL adapter, never a reimplementation of it.
+
+    An earlier version of this script hardcoded the adapter's rule and went
+    stale the moment the adapter was fixed, reporting a disagreement that did
+    not exist. A checker that reimplements the thing it checks only verifies
+    its own copy.
+    """
+    from src.datasets.opv2v import OPV2VDataset
+    return OPV2VDataset(str(scenario_dir)).ego_id
 
 
 def check_split(root: Path, split: str, deep: bool) -> dict:
@@ -103,7 +110,7 @@ def check_split(root: Path, split: str, deep: bool) -> dict:
 
         agent_hist[len(cav_ids)] += 1
 
-        oc, ad = opencood_ego(cav_ids), adapter_ego(cav_ids)
+        oc, ad = opencood_ego(cav_ids), adapter_ego(scen)
         if oc != ad:
             ego_mismatch.append(f"{scen.name}: opencood={oc} adapter={ad} "
                                 f"ids={sorted(cav_ids, key=int)}")
