@@ -32,3 +32,12 @@ results/
 output_animation.mp4
 *.mp4
 src/fault_injectors/npy/
+
+# SLURM job logs and run outputs
+slurm-*.out
+slurm-*.err
+dryrun-*.out
+dryrun-*.err
+results/
+cora-results/
+cora-dryrun/
