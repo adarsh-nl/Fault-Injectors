@@ -91,8 +91,20 @@ def _chunked_selective_scan(x: torch.Tensor, delta: torch.Tensor,
     #                                math for delta -> 0, and it is precisely
     #                                what Mamba's dt_init (dt_min = 0.001)
     #                                exists to prevent.
-    n_sat = n_int = n_total = 0
-    horizons = []            # per-chunk median of 1/|dA|, in positions
+    # Accumulated as TENSORS, never .item(), so the chunk loop stays free of
+    # device syncs: one `.item()` per chunk costs 552 syncs per forward here
+    # (138 chunks x 4 directions) and dominated the step time when it was
+    # first written this way.
+    n_sat = x.new_zeros(())
+    n_int = x.new_zeros(())
+    n_total = 0
+    # Decay horizon is a property of dA alone, so it is computed once over the
+    # whole sequence rather than per chunk -- (Bt, L, D, N) under no_grad.
+    with torch.no_grad():
+        inv = 1.0 / (delta.unsqueeze(-1) * A).abs().clamp(min=1e-12)
+        horizon_p50 = inv.median()
+        horizon_p95 = inv.flatten().quantile(0.95)
+        del inv
     for s in range(0, L, chunk):
         xc = x[:, s:s + chunk]                                   # (Bt, Lc, D)
         dc = delta[:, s:s + chunk]
@@ -105,14 +117,9 @@ def _chunked_selective_scan(x: torch.Tensor, delta: torch.Tensor,
         # not annihilate h, and never from the saturated band, where it does.
         raw_logE = dA.cumsum(dim=1)
         with torch.no_grad():
-            n_sat += int((raw_logE <= -30.0).sum())
-            n_int += int((raw_logE >= -0.01).sum())
+            n_sat += (raw_logE <= -30.0).sum()
+            n_int += (raw_logE >= -0.01).sum()
             n_total += raw_logE.numel()
-            # Effective decay horizon: positions until a contribution decays
-            # by 1/e. delta is what moves during training; |A| is fixed at
-            # init, so this tracks the step size rather than the state matrix.
-            horizons.append(
-                torch.median(1.0 / dA.abs().clamp(min=1e-12)).item())
         logE = raw_logE.clamp(min=-30.0, max=0.0)
         E = torch.exp(logE)
         b = (dc * xc).unsqueeze(-1) * Bc.unsqueeze(2)            # (Bt, Lc, D, N)
@@ -121,20 +128,17 @@ def _chunked_selective_scan(x: torch.Tensor, delta: torch.Tensor,
         hc = E * (h.unsqueeze(1) + acc)                          # (Bt, Lc, D, N)
         ys.append(torch.einsum("bldn,bln->bld", hc, Cc))
         h = hc[:, -1]
-    total = max(n_total, 1)
-    horizons_t = torch.tensor(sorted(horizons)) if horizons else torch.zeros(1)
+    total = float(max(n_total, 1))
+    sat, integ = n_sat / total, n_int / total
     stats = {
-        "saturated": x.new_tensor(n_sat / total),
-        "integrator": x.new_tensor(n_int / total),
-        "healthy": x.new_tensor((total - n_sat - n_int) / total),
-        # Median of the per-chunk medians. The median is deliberately paired
-        # with p95: the integrator regime is a TAIL, and a median that sits at
-        # ~1 position would hide a tail running past L entirely.
-        "horizon_p50": x.new_tensor(
-            float(horizons_t[len(horizons_t) // 2])),
-        "horizon_p95": x.new_tensor(
-            float(horizons_t[min(len(horizons_t) - 1,
-                                 int(0.95 * len(horizons_t)))])),
+        "saturated": sat,
+        "integrator": integ,
+        "healthy": 1.0 - sat - integ,
+        # p50 is paired with p95 deliberately: the integrator regime is a
+        # TAIL, and a median sitting at ~1 position would hide a tail running
+        # past L entirely.
+        "horizon_p50": horizon_p50,
+        "horizon_p95": horizon_p95,
     }
     return torch.cat(ys, dim=1), stats
 

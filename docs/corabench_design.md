@@ -287,12 +287,35 @@ L positions in the integrator band, `dh/dθ` carries the same L-fold
 amplification, and one `lr·sign(g)` step of 1e-3 produced a 1069× change in
 `lc/ssm_out` while every input to the scan moved ≤1.3×.
 
-**A first measurement, on synthetic:** `lc/ssm_logE_saturated` reads **0.46**
-at step 0. That is not a middling amount of one pathology — it is the split
-between the two tails, roughly half the scan pinned at the floor and the rest
-concentrated near `logE ≈ 0`. The three-band tap
-(`saturated` / `healthy` / `integrator`) plus the decay-horizon percentiles
-exist to separate them per step rather than infer the split.
+**First measurement (synthetic only) — the integrator tail is EMPTY.** The
+three-band census reads:
+
+| step | saturated | healthy | integrator | horizon p50 | horizon p95 | Δ amax | `ssm_out` |
+|---|---|---|---|---|---|---|---|
+| 0 | 0.462 | 0.538 | **0.000** | 0.96 | 6.94 | 1.114 | 6.18 |
+| 1 | 0.467 | 0.534 | **0.000** | 0.98 | 7.09 | 4.413 | **3237.7** |
+
+Three things follow, and they revise the paragraphs above rather than
+confirming them:
+
+1. **No entry sits at `logE ≥ -0.01`.** On this configuration the integrator
+   regime does not occur at all, so it cannot be what amplifies here — yet
+   `ssm_out` still jumps **524×** between steps 0 and 1.
+2. **The decay horizon is short, not long.** p50 ≈ 1 position, p95 ≈ 7. Mamba's
+   `dt` range spans 0.6–1000 positions; ours sits entirely at the
+   **fast-decay** end. The Δ defect is therefore that Δ is too **large**
+   (over-forgetting, driving saturation) rather than too small.
+3. **The saturated tail plus Δ's own growth may suffice.** Δ amax grows 4×
+   between the two steps, and `b = (Δ·x)⊗B` grows with it; combined with the
+   chunk-bounded 64-fold accumulation that is the right order for 524×.
+
+**Status: the mechanism is measured, not settled.** This is synthetic — a
+576-position sequence against OPV2V's 8800, different feature statistics, and
+the same `dt_proj` init. The real reading (`lc/ssm_logE_*` on the next OPV2V
+run) is what decides whether the integrator band is populated at scale. Until
+then the honest statement is: **saturation is confirmed and substantial
+(~46%), the integrator regime is unobserved, and Δ's magnitude is the common
+driver of both the saturation and the step-to-step amplification.**
 
 **Second, independent defect: Δ is not initialised.** Mamba's reference
 `dt_init` samples `dt ~ exp(U(log dt_min, log dt_max))` with
