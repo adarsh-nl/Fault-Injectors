@@ -367,6 +367,66 @@ observed rather than argued. Nothing about the clamp, `Δ` init, or the scan
 form is changed until that measurement and the `teacher_enabled=false`
 control are both in.
 
+#### RECON-5: the yaw encode/decode — one sine channel (A8)
+
+**What the paper says.** Nothing. It names PointPillars as the backbone and
+refers to "classification maps" and "regression maps", but specifies no
+regression parameter count, no angle encoding, no direction classifier and no
+treatment of orientation ambiguity. The head design is inherited by
+implication, not by statement.
+
+**What we implement.** A single sine channel, encoded and decoded
+consistently in three places:
+
+| | code | operation |
+|---|---|---|
+| encode | `cpbench/data/preprocessing.py:255` | `reg[:, 6] = sin(g_yaw - anchor_yaw)` |
+| decode (fusion, autograd) | `corabench/fusion/pac.py` | `alpha = anchor_yaw + asin(clamp(reg[:, 6], ...))` |
+| decode (inference, numpy) | `cpbench/data/postprocessing.py:82` | `boxes[:, 6] = an[:, 6] + arcsin(clip(rg[:, 6], -1, 1))` |
+
+The pair is self-consistent — `asin` correctly inverts `sin` — and that is
+the problem: the encoding itself is lossy in three compounding ways.
+
+**1. `reg[:, 6]` is unconstrained.** It is a raw conv output trained by
+smooth-L1 against a target in `[-1, 1]`. Nothing confines it to that range,
+so the decode clamp fires as ordinary behaviour rather than as an edge case.
+
+**2. `asin` has range `[-pi/2, pi/2]`.** Half the yaw circle is
+unrepresentable no matter what the network predicts. A box yawed beyond
+`+-90 deg` from its anchor cannot be decoded correctly.
+
+**3. `sin(D) = sin(pi - D)` — heading is 180-degree ambiguous.** One sine
+channel cannot distinguish a vehicle from the same vehicle facing backwards.
+This is exactly why the PointPillars/OpenCOOD convention pairs sine encoding
+with a **direction classifier**, and `A8_yaw: sin_encoding_no_dir_classifier`
+records that we ship without one. The ambiguity was documented; its
+consequence was not.
+
+**Consequence for reported numbers.** `postprocessing.py` runs the same
+`arcsin` decode, in numpy, outside autograd — so it carries the modelling
+defect without the gradient hazard that `pac.py` had. **Validation AP is
+therefore computed on saturated, direction-ambiguous yaw.** Any AP produced
+before this is fixed is a pipeline-completes signal, not a quality number,
+and must be caveated as pre-decode-fix wherever it is quoted.
+
+**The intended fix, and why it is not in this change.** `atan2` over a
+`(sin, cos)` pair fixes all three at once: bounded outputs, the full
+`[-pi, pi]` range, no singular derivative. It requires `Nreg` 7 -> 8, which
+lands in **shared** `cpbench` code — `data/preprocessing.py` (encode and
+`reg_t` shape), `data/postprocessing.py` (BoxDecoder), `models/heads.py`
+(`num_anchors * 7`), `training/losses.py` (`reshape(b, a, 7, h, w)`) — all of
+which the other four paper packages decode against. That is a cross-package
+change to the layer `test_layering.py` exists to protect, so it does not ride
+along with anything else.
+
+A corabench-local partial is `asin(tanh(r))`, whose derivative `sech(r)` is
+bounded in `(0, 1]`: smooth, no clamp, monotone onto `(-pi/2, pi/2)`. It
+fixes (1) and the singularity, **not** (2) or (3), and the encode would have
+to match. Recorded as an option, not a recommendation.
+
+**Status: reported, not implemented.** The `asin` epsilon clamp (96fbb2a) is a
+numerical guard on the gradient only and changes none of the above.
+
 #### RECON-3: `L_align` reduction — the paper sums, we average (A6)
 
 **What the paper says.** Eq. 11, verbatim:
