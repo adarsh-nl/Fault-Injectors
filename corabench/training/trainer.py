@@ -50,7 +50,8 @@ class Trainer:
 
     def __init__(self, model, train_set, val_set, loss_fn: CoRALoss,
                  exp_logger: ExperimentLogger, cfg: Dict[str, Any],
-                 device: Optional[torch.device] = None) -> None:
+                 device: Optional[torch.device] = None,
+                 taps: Optional[Any] = None) -> None:
         self.model = model
         self.loss_fn = loss_fn
         self.explog = exp_logger
@@ -83,11 +84,53 @@ class Trainer:
         self.log_every = int(cfg.get("log_every", 50))
         self.start_epoch = 0
         self.best_metric = -1.0
+        self._nonfinite_steps = 0
+        self.taps = taps
+        self._scale_floor = float(cfg.get("scale_floor", 1e-8))
+        self._initial_scale = float(self.scaler.get_scale()) if self.amp else 1.0
 
     # -- checkpointing ------------------------------------------------------
 
+    def _optimizer_state_amax(self) -> float:
+        """max|exp_avg_sq| over Adam's state; inf/nan once the moments rot.
+
+        Adam's moments are the one piece of training state GradScaler does not
+        protect: ``found_inf`` guards the CURRENT step's gradients, but a
+        moment that has already gone non-finite makes every subsequent step --
+        including ones the scaler considers healthy -- write NaN into the
+        parameters. Job 546515 finished with 268/402 non-finite Adam tensors
+        by a route that could not be reconstructed from the code, so it is
+        measured rather than assumed.
+        """
+        worst = 0.0
+        for state in self.optimizer.state.values():
+            v = state.get("exp_avg_sq")
+            if torch.is_tensor(v):
+                m = float(v.abs().max())
+                if not (m <= worst):        # False for NaN, so NaN propagates
+                    worst = m
+        return worst
+
+    def _assert_finite_state(self, epoch: int, tag: str) -> bool:
+        """True if every model tensor is finite; logs the offenders if not."""
+        bad = [k for k, v in self.model.state_dict().items()
+               if torch.is_floating_point(v) and not torch.isfinite(v).all()]
+        if bad:
+            total = sum(1 for v in self.model.state_dict().values()
+                        if torch.is_floating_point(v))
+            logger.error(
+                "epoch %d: REFUSING to write checkpoint %r -- %d/%d float "
+                "tensors are non-finite (first: %s). A checkpoint that loads "
+                "cleanly and is entirely NaN is worse than no checkpoint: it "
+                "was written as 'best' in job 546515 and looked valid. Fix "
+                "the run, do not resume from this state.",
+                epoch, tag, len(bad), total, ", ".join(bad[:3]))
+        return not bad
+
     def save_checkpoint(self, epoch: int, tag: str) -> Path:
         path = self.explog.checkpoints_dir / f"{tag}.pt"
+        if not self._assert_finite_state(epoch, tag):
+            return path
         torch.save({
             "epoch": epoch,
             "model": self.model.state_dict(),
@@ -119,15 +162,65 @@ class Trainer:
             self.optimizer.zero_grad(set_to_none=True)
             with torch.autocast(device_type=self.device.type,
                                 enabled=self.amp):
-                out = self.model(batch, return_teacher=True)
+                out = self.model(batch, taps=self.taps, return_teacher=True)
                 losses = self.loss_fn(out, batch)
             self.scaler.scale(losses["total"]).backward()
             self.scaler.unscale_(self.optimizer)
             grad_norm = torch.nn.utils.clip_grad_norm_(
                 self.model.parameters(), self.grad_clip)
-            self.scaler.step(self.optimizer)
-            self.scaler.update()
+
+            # clip_grad_norm_ defaults to error_if_nonfinite=False: ONE NaN
+            # gradient makes total_norm NaN, so clip_coef = max_norm/(NaN+eps)
+            # is NaN and every gradient -- including every finite one -- is
+            # multiplied by it. GradScaler.step() then skips on found_inf, but
+            # found_inf was computed by unscale_ BEFORE the clip, and it does
+            # not protect Adam's already-accumulated moments: a single step
+            # that gets through poisons exp_avg/exp_avg_sq permanently, and
+            # from then on every step the scaler considers healthy still
+            # writes NaN into the parameters. Job 546515 ended with 226/227
+            # non-finite tensors and 268/402 non-finite Adam states this way.
+            #
+            # Skipping here turns silent total corruption into a logged skip.
+            # update() is still called so the scale backs off exactly as it
+            # would have; only the optimizer step is withheld.
+            if not bool(torch.isfinite(grad_norm)):
+                self._nonfinite_steps += 1
+                logger.warning(
+                    "epoch %d batch %d: non-finite grad_norm (%s) -- skipping "
+                    "optimizer step (scaler scale %.4g, %d skipped so far). "
+                    "Gradients zeroed; Adam state left untouched.",
+                    epoch, i, grad_norm, self.scaler.get_scale(),
+                    self._nonfinite_steps)
+                self.optimizer.zero_grad(set_to_none=True)
+                self.scaler.update()
+            else:
+                self.scaler.step(self.optimizer)
+                self.scaler.update()
             running += float(losses["total"].item())
+
+            # Scale-floor abort. A GradScaler that has backed off this far has
+            # not been fixed by backing off, so the non-finite quantity is not
+            # fp16 gradient overflow -- it does not depend on the loss scale,
+            # and no further step can recover. Job 546515 ran to the end of its
+            # epoch with scale exactly 0.0, learning nothing and writing a
+            # 226/227-NaN checkpoint. Stopping here stops at the informative
+            # moment instead of burning the wall clock.
+            scale = self.scaler.get_scale()
+            if scale < self._scale_floor:
+                raise RuntimeError(
+                    f"GradScaler scale collapsed to {scale:.4g} (floor "
+                    f"{self._scale_floor:.4g}) at epoch {epoch} batch {i} "
+                    f"after {self._nonfinite_steps} non-finite steps. The "
+                    f"scale has halved from {self._initial_scale:.4g} without "
+                    f"the gradients becoming finite, so the source is "
+                    f"scale-independent: a non-finite forward activation or "
+                    f"loss, not fp16 gradient overflow. Last losses: "
+                    f"total={float(losses['total'].item()):.4g} "
+                    f"cls={float(losses['cls'].item()):.4g} "
+                    f"reg={float(losses['reg'].item()):.4g} "
+                    f"align={float(losses['align'].item()):.4g}. Inspect "
+                    f"taps.csv (n_nan/n_inf per location) for the first "
+                    f"location that goes non-finite.")
 
             self.explog.log_fault_records(batch["fault_records"])
             if i % self.log_every == 0:
@@ -142,12 +235,20 @@ class Trainer:
                     loss_pac=float(losses["pac"].item()),
                     lr=self.optimizer.param_groups[0]["lr"],
                     grad_norm=float(grad_norm),
+                    scaler_scale=float(self.scaler.get_scale()),
+                    n_skipped_steps=float(self._nonfinite_steps),
+                    opt_state_amax=self._optimizer_state_amax(),
                     batch_time_s=time.perf_counter() - t0,
                     gpu_mem_mb=mem)
                 self.explog.log_train(rec)
-                logger.info("epoch %d batch %d loss %.4f (cls %.4f reg %.4f "
-                            "align %.4f)", epoch, i, rec.loss_total,
-                            rec.loss_cls, rec.loss_reg, rec.loss_align)
+                logger.info(
+                    "epoch %d batch %d loss %.4g (cls %.4g reg %.4g "
+                    "align %.4g pac %.4g) | grad_norm %.4g scale %.4g "
+                    "skipped %d opt_amax %.4g",
+                    epoch, i, rec.loss_total, rec.loss_cls, rec.loss_reg,
+                    rec.loss_align, rec.loss_pac, rec.grad_norm,
+                    rec.scaler_scale, int(rec.n_skipped_steps),
+                    rec.opt_state_amax)
         return running / max(len(self.loader), 1)
 
     def fit(self) -> Dict[str, float]:

@@ -59,6 +59,16 @@ class TrainRecord:
     grad_norm: float = 0.0
     batch_time_s: float = 0.0
     gpu_mem_mb: float = 0.0
+    # AMP diagnostics. The scale is the quantity that distinguishes fp16
+    # gradient overflow (scale backs off, run recovers) from a non-finite
+    # forward or loss (scale backs off forever and the run is dead), and
+    # without it in the row that distinction is unrecoverable after the fact.
+    # opt_state_amax is max|exp_avg_sq| across the optimizer: it goes
+    # non-finite at the step Adam's moments are poisoned, which is otherwise
+    # invisible until the checkpoint is inspected.
+    scaler_scale: float = 0.0
+    n_skipped_steps: float = 0.0
+    opt_state_amax: float = 0.0
 
     def as_row(self) -> Dict[str, Any]:
         row = asdict(self)

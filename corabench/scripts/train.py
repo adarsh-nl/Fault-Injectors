@@ -22,7 +22,7 @@ from ..training.losses import CoRALoss
 from ..training.trainer import Trainer
 from cpbench.utils.config import load_config
 from .common import (build_adapters, build_cora_dataset, build_experiment,
-                     build_grid, build_model, resolve_device)
+                     build_grid, build_model, build_taps, resolve_device)
 from cpbench.faults.bridge import DataFaultBridge
 
 logging.basicConfig(level=logging.INFO,
@@ -64,12 +64,25 @@ def main() -> None:
 
         model = build_model(cfg, grid).to(device)
         loss_fn = CoRALoss(**{k: v for k, v in cfg["model"]["loss"].items()})
+        # Taps during TRAINING, not just evaluation: StatsTap already records
+        # n_nan / n_inf per location, so `taps=stats` localises a non-finite
+        # forward to the module that produced it. Without this the training
+        # path built no taps at all and taps.csv came out empty -- the same
+        # silent-empty-artifact failure as the logger_names bug.
+        taps, stats_tap = build_taps(cfg, explog.dir)
         trainer = Trainer(model, train_set, val_set, loss_fn, explog,
-                          cfg["trainer"], device=device)
+                          cfg["trainer"], device=device, taps=taps)
         if args.resume:
             trainer.resume(args.resume)
-        final = trainer.fit()
-        logger.info("final validation: %s", final)
+        try:
+            final = trainer.fit()
+            logger.info("final validation: %s", final)
+        finally:
+            # Flush inside `finally` so a scale-floor abort still writes the
+            # tap rows that explain WHY it aborted.
+            if stats_tap:
+                explog.log_tap_records(stats_tap.records)
+                logger.info("wrote %d tap records", len(stats_tap.records))
     finally:
         explog.close()
 

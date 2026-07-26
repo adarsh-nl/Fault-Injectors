@@ -45,3 +45,6 @@ cora-dryrun/
 # Local assistant context, not part of the artifact
 CLAUDE.md
 .claude/
+nan-diag-*.out
+nan-diag-*.err
+cora-nan-diag/
