@@ -124,3 +124,45 @@ def test_adaptive_recalibration_shrinks_scores(anchor_gen):
                          torch.zeros(1, 14, h, w))
     assert len(dets) == 1
     assert set(dets[0]) == {"boxes", "scores", "branch"}
+
+
+def test_pac_yaw_decode_has_a_finite_gradient_at_the_asin_boundary(grid):
+    """The AsinBackward0 defect that aborted job 549416.
+
+    ``asin'(x) = 1/sqrt(1-x^2)`` is SINGULAR at ``x = +-1``. Clamping the yaw
+    residual to exactly +-1 therefore produces a finite forward (``+-pi/2``)
+    and an INFINITE gradient, which multiplies the upstream gradient to nan.
+    It surfaced as ``encoder=nan`` and ``local_head=nan`` in
+    ``grad_norm_by_module`` from batch 31 while pac/lc/lc_head/adaptive stayed
+    finite -- a finite loss, a finite forward, and no non-finite forward tap:
+    invisible to every observation tap, because the taps watch activations.
+
+    ``reg[:, 6]`` is an unconstrained prediction of ``sin(delta_yaw)``, so it
+    reaches and exceeds the boundary routinely rather than rarely. Values 1.0
+    and 3.7 both land on the clamp.
+
+    This test fails on ``clamp(-1, 1)`` and passes on ``clamp(-1+1e-6,
+    1-1e-6)``; it was written against the hard clamp first and observed to
+    fail before the fix went in.
+    """
+    anchors = torch.from_numpy(AnchorGenerator(grid)()).float()
+    num_anchors = anchors.shape[2]
+    pac = PACModule(num_anchors, num_anchors * 7, anchors)
+    h, w = grid.feature_hw
+
+    for saturating in (1.0, -1.0, 3.7):
+        cls_map = torch.zeros(1, num_anchors, h, w)
+        reg_map = torch.zeros(1, num_anchors * 7, h, w)
+        # channel 6 of every anchor is the yaw residual
+        for k in range(num_anchors):
+            reg_map[:, k * 7 + 6] = saturating
+        reg_map.requires_grad_(True)
+
+        params = pac._decode_params(cls_map, reg_map)
+        params.sum().backward()
+
+        assert torch.isfinite(params).all(), \
+            f"decoded params non-finite at reg[:,6]={saturating}"
+        assert torch.isfinite(reg_map.grad).all(), (
+            f"non-finite GRADIENT at reg[:,6]={saturating}: asin'(x) is "
+            f"singular at +-1, so the clamp bound must sit strictly inside it")

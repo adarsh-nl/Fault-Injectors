@@ -161,7 +161,26 @@ class PACModule(nn.Module):
         y = reg[:, 1] * d + anch[:, 1]
         z = reg[:, 2] * anch[:, 5] + anch[:, 2]
         lwh = torch.exp(reg[:, 3:6].clamp(-5, 5)) * anch[:, 3:6]
-        alpha = anch[:, 6] + torch.asin(reg[:, 6].clamp(-1, 1))
+        # Clamp JUST INSIDE +-1, not to it. asin'(x) = 1/sqrt(1-x^2) is
+        # SINGULAR at x = +-1, so a hard clamp(-1, 1) gives a finite forward
+        # (asin = +-pi/2) and an INFINITE gradient, which then multiplies the
+        # upstream gradient to nan. torch.autograd.set_detect_anomaly named
+        # this as AsinBackward0 in job 549416: the bad gradient flowed back
+        # from PAC's PE decode through the shared encoder, showing up as
+        # encoder=nan and local_head=nan in grad_norm_by_module from batch 31
+        # while pac/lc/lc_head/adaptive stayed finite, with a finite loss and
+        # no non-finite forward tap anywhere.
+        #
+        # At 1 - 1e-6 the derivative is ~707: finite, far below fp16's 65504,
+        # and the forward is unchanged to 6 decimal places. Same trap class as
+        # the fp16 focal clamp (RECON-3) -- a clamp that makes the FORWARD
+        # safe while leaving the BACKWARD singular.
+        #
+        # This is a numerical guard, NOT a fix for the decode itself: reg[:,6]
+        # is an unconstrained prediction of sin(delta_yaw), so it saturates
+        # routinely rather than rarely. See A8 / the decode note in
+        # docs/corabench_design.md.
+        alpha = anch[:, 6] + torch.asin(reg[:, 6].clamp(-1 + 1e-6, 1 - 1e-6))
         return torch.stack([x, y, z, lwh[:, 0], lwh[:, 2], lwh[:, 1],
                             alpha, conf], dim=1)                 # (B, 8, H, W)
 
