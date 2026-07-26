@@ -18,6 +18,8 @@ import argparse
 import logging
 from pathlib import Path
 
+import torch
+
 from ..training.losses import CoRALoss
 from ..training.trainer import Trainer
 from cpbench.utils.config import load_config
@@ -43,6 +45,21 @@ def main() -> None:
 
     cfg = load_config(args.config, args.overrides)
     device = resolve_device(cfg)
+
+    # trainer.detect_anomaly=true -- the ONLY instrument that sees a
+    # backward-only NaN. The taps observe forward activations, so a step with
+    # a finite forward, a finite loss and a non-finite GRADIENT is invisible
+    # to them; anomaly mode raises at the first backward op producing a
+    # non-finite value and names the forward line that created it. 2-5x
+    # slower, so it is opt-in and never a default.
+    if bool(cfg["trainer"].get("detect_anomaly", False)):
+        logger.warning(
+            "torch.autograd.set_detect_anomaly(True): every backward op is "
+            "checked and 2-5x slower. Diagnostic only -- the run is expected "
+            "to RAISE at the first non-finite gradient, and that traceback "
+            "is the result. Rows logged before it survive via explog.close().")
+        torch.autograd.set_detect_anomaly(True)
+
     explog = build_experiment(cfg, suffix="train")
     try:
         ds_cfg = cfg["dataset"]
