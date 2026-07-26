@@ -41,3 +41,7 @@ dryrun-*.err
 results/
 cora-results/
 cora-dryrun/
+
+# Local assistant context, not part of the artifact
+CLAUDE.md
+.claude/

@@ -81,8 +81,8 @@ def test_the_camera_model_against_a_lidar_dataset_is_rejected() -> None:
 
 
 def test_dataset_groups_compose() -> None:
-    """Real-data groups are composed but not opened: the paths point at
-    /deepstore and only exist on the cluster."""
+    """Real-data groups are composed but not opened: the paths resolve under
+    $CPBENCH_DATA_ROOT and only exist where the data is staged."""
     for name in ("synthetic_lidar", "opv2v_lidar", "v2xset", "dair_v2x"):
         cfg = common.load([f"dataset={name}"])
         assert cfg["dataset"]["track"] == "lidar"

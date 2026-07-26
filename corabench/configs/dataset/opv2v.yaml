@@ -1,8 +1,9 @@
 # OPV2V (OpenCOOD folder layout) via src.datasets.OPV2VDataset.
-# On the UT EEMCS HPC the dataset lives under /deepstore; override `root`.
+# `root` derives from data_root (see cpbench/utils/paths.py): set
+# $CPBENCH_DATA_ROOT for the machine, or dataset.root= for this one path.
 name: opv2v
 adapter: opv2v
-root: /deepstore/datasets/opv2v          # contains train/ validate/ test/
+root: ${data_root}/opencood/opv2v        # contains train/ validate/ test/
 train_split: train
 val_split: validate
 test_split: test

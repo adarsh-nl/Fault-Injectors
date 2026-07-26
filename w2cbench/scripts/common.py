@@ -36,6 +36,7 @@ from cpbench.logbook import (ExperimentLogger, ExperimentMeta,
                              capture_environment, seed_everything)
 from cpbench.observation import DriftTap, StatsTap, TapSet, TensorDumpTap
 from cpbench.utils import load_config
+from cpbench.utils.paths import missing_root_message
 
 from ..comm import (CommunicationGraph, GaussianSmoother, make_selector)
 from ..data.collate import camera_collator, lidar_collator
@@ -188,9 +189,10 @@ def build_adapters(cfg: Dict[str, Any],
         split_dir = root / mapping.get(split, split) if split else root
         if not split_dir.is_dir():
             raise FileNotFoundError(
-                f"dataset split directory {split_dir} not found. Set "
-                f"dataset.root and check the split map {dataset.get('split')}. "
-                "On the UT HPC the data is read-only under /deepstore.")
+                missing_root_message(split_dir,
+                                     config_value=cfg.get("data_root"),
+                                     what=f"{dataset['name']} split directory")
+                + f"\n(split map: {dataset.get('split')})")
         wanted = dataset.get("scenarios")
         scenarios = sorted(p for p in split_dir.iterdir() if p.is_dir())
         if wanted:

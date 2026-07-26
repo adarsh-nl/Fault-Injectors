@@ -2,7 +2,7 @@
 name: opv2v_lidar
 adapter: opv2v
 track: lidar
-root: /deepstore/datasets/course/adas/opv2v
+root: ${data_root}/opencood/opv2v
 split: {train: train, val: validate, test: test}
 fps: 10.0
 max_cav: 5

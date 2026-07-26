@@ -5,7 +5,7 @@
 #
 # Differences from corabench/slurm/train.sbatch, all of which matter for a
 # multi-day run:
-#   1. dataset.root points at the real staged path, not /deepstore/datasets/opv2v
+#   1. dataset paths come from $CPBENCH_DATA_ROOT, not a literal in a config
 #   2. automatic resume from last.pt, so requeue after the wall clock does not
 #      restart from epoch 0
 #   3. --signal + --requeue so SLURM checkpoints cleanly instead of SIGKILL
@@ -32,7 +32,10 @@ set -euo pipefail
 
 REPO="${REPO:-$HOME/Fault-Injectors}"
 VENV="${VENV:-$REPO/.venv-hpc}"
-DATA_ROOT="${DATA_ROOT:-/datasets/eemcs/ps/cv/opencood/opv2v}"
+# One resolution point for data: CPBENCH_DATA_ROOT (see cpbench/utils/paths.py).
+# On the UT EEMCS cluster the shared CV tree is /datasets/eemcs/ps/cv.
+export CPBENCH_DATA_ROOT="${CPBENCH_DATA_ROOT:-/datasets/eemcs/ps/cv}"
+DATA_ROOT="$CPBENCH_DATA_ROOT/opencood/opv2v"
 
 # Job-stable results dir: reused across requeues so --resume can find last.pt.
 RUN_TAG="${RUN_TAG:-cora_opv2v_baseline}"
@@ -88,7 +91,6 @@ trap 'echo "caught USR1, requeueing"; scontrol requeue "$SLURM_JOB_ID"; exit 0' 
 srun "$VENV/bin/python" -m corabench.scripts.train \
     "${RESUME_ARGS[@]}" \
     dataset=opv2v \
-    dataset.root="$DATA_ROOT" \
     results_dir="$RESULTS" \
     trainer.num_workers=7 \
     "$@" &

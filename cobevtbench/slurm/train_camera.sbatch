@@ -53,8 +53,9 @@ export CUBLAS_WORKSPACE_CONFIG=":4096:8"   # required for deterministic cuBLAS
 # This points torchvision at that shared cache and fails loudly if it is cold.
 export TORCH_HOME="${TORCH_HOME:-$HOME/.cache/torch}"
 
-# Datasets are read-only under /deepstore; results go to $HOME, scratch to
-# node-local /local. Never write to /deepstore.
+# Dataset paths derive from $CPBENCH_DATA_ROOT (cpbench/utils/paths.py) and are
+# read-only; results go to $HOME, scratch to node-local /local. Never write
+# into the dataset tree.
 srun "$VENV/bin/python" -m cobevtbench.scripts.train \
     results_dir="$RESULTS" \
     "$@"

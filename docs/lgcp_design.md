@@ -834,7 +834,7 @@ unless the py3.7 env is present.
 - Head nodes `hpc-head1/2.ewi.utwente.nl`, submit only — never run on nodes directly.
 - Partitions `ps,main-gpu` for backbone runs; `ps,main-cpu` suffices for
   `scripts/simulate.py` (network-only sweeps, Fig. 7) since it needs no GPU.
-- Datasets under `/deepstore/datasets/...` (read-only); `/local` for scratch.
+- Datasets under `$CPBENCH_DATA_ROOT` (read-only); `/local` for scratch.
 - Two environments: `.venv-lgcp` (py3.9+, core) and a conda env `opencood-py37`
   built by `slurm/opencood_env.sbatch` with spconv pinned to a recorded version.
 - `benchmark_array.sbatch` is a job array over `expand_sweep` conditions — the

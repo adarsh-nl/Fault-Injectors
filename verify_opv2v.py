@@ -10,8 +10,14 @@ cross-checks the ego-selection convention against OpenCOOD's.
 
 Run on a head node before submitting anything:
 
-    python verify_opv2v.py --root /datasets/eemcs/ps/cv/opencood/opv2v
-    python verify_opv2v.py --root ... --splits train validate test --deep
+    python verify_opv2v.py                      # $CPBENCH_DATA_ROOT/opencood/opv2v
+    python verify_opv2v.py --root /elsewhere/opv2v --splits train test --deep
+
+With no --root the path comes from the same resolver every config uses
+(`cpbench.utils.paths`): `$CPBENCH_DATA_ROOT` if set, else the built-in
+default. On the UT EEMCS cluster that makes the default
+`/datasets/eemcs/ps/cv/opencood/opv2v` -- but the variable is what is
+authoritative, not this docstring.
 
 Exit code 0 = all checks passed, 1 = at least one BLOCKER.
 No torch import, so it runs in a bare python3 with pyyaml.
@@ -196,8 +202,9 @@ def check_split(root: Path, split: str, deep: bool) -> dict:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--root", required=True,
-                    help="dataset root containing train/ validate/ test/")
+    ap.add_argument("--root", default=None,
+                    help="dataset root containing train/ validate/ test/ "
+                         "(default: $CPBENCH_DATA_ROOT/opencood/opv2v)")
     ap.add_argument("--splits", nargs="*",
                     default=["train", "validate", "test"])
     ap.add_argument("--deep", action="store_true",
@@ -205,8 +212,14 @@ def main() -> int:
                          "full directory walk)")
     args = ap.parse_args()
 
-    root = Path(args.root)
-    print(f"root: {root}")
+    if args.root:
+        root, source = Path(args.root), "--root"
+    else:
+        # Same resolver the configs use, so this script cannot verify a
+        # different tree from the one training will open.
+        from cpbench.utils.paths import dataset_root, describe_source
+        root, source = dataset_root("opv2v"), describe_source()
+    print(f"root: {root}   (from {source})")
     if not root.is_dir():
         blocker(f"root does not exist: {root}")
         print("\nVERDICT: NO-GO")

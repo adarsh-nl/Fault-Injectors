@@ -14,6 +14,11 @@ defaults:
   faults:  none
   taps:    none
 
+# Base directory every dataset path derives from. null means: take
+# $CPBENCH_DATA_ROOT if set, else the built-in default. Never hardcode an
+# absolute dataset path in a group file -- see cpbench/utils/paths.py.
+data_root: null
+
 experiment_name: ${model.name}_${dataset.name}_${faults.name}
 paper: "arXiv:2601.12749v1"
 

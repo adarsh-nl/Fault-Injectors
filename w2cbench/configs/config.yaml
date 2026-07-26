@@ -7,6 +7,11 @@ defaults:
   taps: none
   trainer: default
 
+# Base directory every dataset path derives from. null means: take
+# $CPBENCH_DATA_ROOT if set, else the built-in default. Never hardcode an
+# absolute dataset path in a group file -- see cpbench/utils/paths.py.
+data_root: null
+
 experiment_name: ${model.name}_${dataset.name}_${faults.name}
 paper: "Where2comm (arXiv:2209.12836, NeurIPS 2022)"
 seed: 2022

@@ -76,7 +76,8 @@ def main() -> None:
         ds_cfg = cfg["dataset"]
         grid = build_grid(ds_cfg)
         fps = float(ds_cfg.get("fps", 10.0))
-        adapters = build_adapters(ds_cfg, ds_cfg.get("test_split"))
+        adapters = build_adapters(ds_cfg, ds_cfg.get("test_split"),
+                                  cfg.get("data_root"))
         taps, stats_tap = build_taps(cfg, explog.dir)
 
         model = build_model(cfg, grid)

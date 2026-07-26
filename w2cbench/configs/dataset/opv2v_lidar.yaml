@@ -1,8 +1,9 @@
-# OPV2V LiDAR. On the UT HPC the data is read-only under /deepstore.
+# OPV2V LiDAR. `root` derives from data_root (cpbench/utils/paths.py):
+# set $CPBENCH_DATA_ROOT per machine, or dataset.root= for this one path.
 name: opv2v_lidar
 adapter: opv2v
 track: lidar
-root: /deepstore/datasets/course/adas/opv2v
+root: ${data_root}/opencood/opv2v
 split: {train: train, val: validate, test: test}
 scenarios: null               # null = every scenario directory in the split
 fps: 10.0

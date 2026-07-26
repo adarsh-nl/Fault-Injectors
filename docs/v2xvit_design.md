@@ -321,6 +321,6 @@ loads, and `test_wire.py` pins registry ↔ emissions both ways.
 ## 12. HPC
 
 UT EEMCS cluster; see `v2xvitbench/slurm/README.md`. Train on `ps,main-gpu`
-(V2XSet read-only under `/deepstore/datasets/course/adas/v2xset`), fault
+(V2XSet read-only under `$CPBENCH_DATA_ROOT/opencood/v2xset`), fault
 families as a 7-task job array, severity curves as a 3-task array; synthetic
 smoke runs on `ps,main-cpu` with no data or checkpoint.

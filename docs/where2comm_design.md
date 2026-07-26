@@ -1256,7 +1256,7 @@ throughput, peak memory) and lands in `sys_*` columns.
 
 Following `cobevtbench/slurm/` and `lgcpbench/slurm/`. Jobs submitted from
 `hpc-head1.ewi.utwente.nl` / `hpc-head2` with `-p ps,main-gpu`; datasets read
-from `/deepstore/datasets/...`; scratch on `/local`; results written under
+from `$CPBENCH_DATA_ROOT`; scratch on `/local`; results written under
 `$HOME` and rsynced. Two templates:
 
 * `train.sbatch` — one GPU, one config, checkpoint to `$HOME`.

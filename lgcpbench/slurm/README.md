@@ -11,9 +11,16 @@ Cluster docs: <https://hpc.wiki.utwente.nl/eemcs-hpc> · SLURM basics:
   compute node.
 - Partitions: `ps,main-cpu` for the control-plane and native-backbone sweeps
   (they need no GPU), `ps,main-gpu` for the OpenCOOD paper models.
-- Storage: code and results in `/home/<user>`, datasets read-only under
-  `/deepstore/datasets/...` (set `dataset.root=`), node-local scratch in
-  `/local` (cleared after the job).
+- Storage: code and results in `/home/<user>`, node-local scratch in `/local`
+  (cleared after the job).
+- Datasets: every path derives from the `CPBENCH_DATA_ROOT` environment
+  variable — set it once for the machine rather than passing `dataset.root=`
+  per job. On this cluster the shared CV tree is `/datasets/eemcs/ps/cv`;
+  the expected subdirectories are listed in `cpbench/utils/paths.py`.
+
+  ```bash
+  export CPBENCH_DATA_ROOT=/path/to/your/datasets
+  ```
 - Everything is config-driven and non-interactive; no job needs a terminal.
 
 ## Two environments, and why
@@ -61,7 +68,6 @@ sbatch lgcpbench/slurm/benchmark_array.sbatch faults=comm_stress
 sbatch --partition=ps,main-gpu --gres=gpu:1 \
   lgcpbench/slurm/benchmark_array.sbatch \
   model=where2comm dataset=opv2v faults=pose_error \
-  dataset.root=/deepstore/datasets/OPV2V \
   model.hypes_yaml=$HOME/OpenCOOD/opencood/hypes_yaml/point_pillar_where2comm.yaml \
   model.checkpoint=$HOME/weights/where2comm.pth
 

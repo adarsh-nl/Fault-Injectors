@@ -18,15 +18,27 @@ Usage::
 
 Override rules: `group=name` swaps a whole group file; `a.b.c=value` sets a
 leaf (value parsed as YAML, so numbers/bools/lists work).
+
+Dataset paths are not written out in the group files. Each root config carries
+a ``data_root`` key which :func:`load_config` resolves through
+``cpbench.utils.paths`` (``$CPBENCH_DATA_ROOT`` first), and the dataset groups
+reference it as ``root: ${data_root}/opencood/opv2v``. The resolved value is
+substituted before interpolation and written back into the config, so the
+absolute path a run actually used is recorded in its results bundle.
 """
 
 from __future__ import annotations
 
+import logging
 import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 
 import yaml
+
+from .paths import data_root
+
+logger = logging.getLogger(__name__)
 
 _INTERP = re.compile(r"\$\{([a-zA-Z0-9_.]+)\}")
 
@@ -100,9 +112,21 @@ def load_config(root_path: "str | Path",
                 f"config group {group}={name!r}: {path} not found")
         cfg[group] = _read_yaml(path)
 
+    explicit_data_root = False
     for ov in leaf_overrides:
         key, _, val = ov.partition("=")
-        _set_dotted(cfg, key.strip(), yaml.safe_load(val))
+        key = key.strip()
+        explicit_data_root |= key == "data_root"
+        _set_dotted(cfg, key, yaml.safe_load(val))
+
+    # Resolve the dataset base before interpolation, so `${data_root}` in the
+    # dataset groups expands to a concrete path -- and so the results bundle
+    # records where the data actually came from, not an unresolved reference.
+    # A `data_root=` typed on the command line is final; otherwise the
+    # environment outranks the checked-in config key (see cpbench.utils.paths).
+    if not explicit_data_root:
+        cfg["data_root"] = str(data_root(cfg.get("data_root")))
+    logger.debug("data_root resolved to %s", cfg["data_root"])
 
     _interpolate(cfg)
     return cfg

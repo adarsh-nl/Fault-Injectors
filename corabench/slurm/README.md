@@ -10,9 +10,33 @@ Cluster docs: <https://hpc.wiki.utwente.nl/eemcs-hpc> · SLURM basics:
   submit there; **never** ssh into compute nodes.
 - Partitions: use `ps,main-gpu` for GPU jobs (as in the templates),
   `ps,main-cpu` for CPU-only sweeps.
-- Storage: home `/home/<user>` (code, results), datasets under
-  `/deepstore/datasets/...` (read-only, set `dataset.root=` accordingly),
-  node-local scratch `/local` (temporary only).
+- Storage: home `/home/<user>` (code, results), node-local scratch `/local`
+  (temporary only), and the dataset tree — see below.
+
+## Where the data is: `CPBENCH_DATA_ROOT`
+
+Every dataset path in this repository derives from one environment variable.
+Set it once for the machine and no config, script or command line needs an
+absolute path:
+
+```bash
+export CPBENCH_DATA_ROOT=/path/to/your/datasets     # on this cluster: /datasets/eemcs/ps/cv
+```
+
+The resolver (`cpbench/utils/paths.py`) expects this layout underneath:
+
+| subdirectory | dataset |
+|---|---|
+| `opencood/opv2v` | OPV2V |
+| `opencood/v2xset` | V2XSet |
+| `air-thu/dair-v2x-c` | DAIR-V2X-C |
+| `huggingface/griffin` | Griffin |
+
+Precedence: an explicit `data_root=` on the command line, then
+`$CPBENCH_DATA_ROOT`, then the `data_root` key in `configs/config.yaml`, then
+the built-in default. A single dataset can still be pointed elsewhere with
+`dataset.root=/somewhere/else` — that always wins for that one path. The
+resolved value is recorded in each run's `config.yaml`.
 - Jobs must run non-interactively — everything here is config-driven and
   needs no terminal interaction. Status page:
   <http://hpc-status.ewi.utwente.nl/slurm/>.
@@ -32,8 +56,7 @@ python3 -m venv .venv-hpc
 ## Train (paper setting: 30 epochs, batch 2, 1 GPU)
 
 ```bash
-sbatch corabench/slurm/train.sbatch \
-    dataset=opv2v dataset.root=/deepstore/datasets/opv2v
+sbatch corabench/slurm/train.sbatch dataset=opv2v
 ```
 
 ## Benchmark a trained checkpoint over all fault sweeps (job array)
@@ -41,7 +64,7 @@ sbatch corabench/slurm/train.sbatch \
 ```bash
 sbatch corabench/slurm/benchmark_array.sbatch \
     CKPT=$HOME/cora-results/<experiment>/checkpoints/best.pt \
-    dataset=opv2v dataset.root=/deepstore/datasets/opv2v
+    dataset=opv2v
 ```
 
 Each array task writes its own `results/<experiment>_bench/` bundle

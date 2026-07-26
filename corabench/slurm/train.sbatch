@@ -3,8 +3,10 @@
 #   sbatch corabench/slurm/train.sbatch dataset=opv2v
 # Notes
 #   * submit ONLY from hpc-head1/hpc-head2; never ssh into compute nodes.
-#   * datasets are read from /deepstore/datasets; heavy scratch goes to
-#     /local on the node (cleared after the job).
+#   * dataset paths all derive from $CPBENCH_DATA_ROOT (cpbench/utils/paths.py);
+#     export it for your machine -- on the UT EEMCS cluster that is
+#     /datasets/eemcs/ps/cv. Heavy scratch goes to /local on the node
+#     (cleared after the job).
 #SBATCH --job-name=cora-train
 #SBATCH --partition=ps,main-gpu
 #SBATCH --gres=gpu:1
@@ -17,6 +19,7 @@ set -euo pipefail
 
 REPO="${REPO:-$HOME/Fault-Injectors}"
 VENV="${VENV:-$REPO/.venv-hpc}"
+export CPBENCH_DATA_ROOT="${CPBENCH_DATA_ROOT:-/datasets/eemcs/ps/cv}"
 SCRATCH="/local/$USER/$SLURM_JOB_ID"
 mkdir -p "$SCRATCH"
 

@@ -2,9 +2,19 @@
 
 Submit from a head node (`hpc-head1.ewi.utwente.nl` or `hpc-head2`), never from
 a compute node. Partitions: `ps,main-gpu` for training and benchmarking,
-`ps,main-cpu` for the synthetic smoke run. Datasets are read-only under
-`/deepstore/datasets/...`; results go to `$HOME` and node-local scratch to
-`/local/$USER`.
+`ps,main-cpu` for the synthetic smoke run. Results go to `$HOME` and
+node-local scratch to `/local/$USER`.
+
+Dataset paths all derive from one environment variable — set it once for the
+machine and no command needs an absolute path (on this cluster the shared CV
+tree is `/datasets/eemcs/ps/cv`):
+
+```bash
+export CPBENCH_DATA_ROOT=/path/to/your/datasets
+```
+
+See `cpbench/utils/paths.py` for the expected subdirectory layout and the
+precedence rules; `dataset.root=` still overrides a single dataset.
 
 | script | what it does | typical wall time |
 |---|---|---|

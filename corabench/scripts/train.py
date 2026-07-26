@@ -4,8 +4,10 @@ train.py
 Train CoRA. Everything comes from the config tree; typical invocations::
 
     python -m corabench.scripts.train                       # synthetic smoke
+    export CPBENCH_DATA_ROOT=/path/to/datasets                # once per machine
+    python -m corabench.scripts.train dataset=opv2v trainer=default
     python -m corabench.scripts.train dataset=opv2v \\
-        dataset.root=/deepstore/datasets/opv2v trainer=default
+        dataset.root=/somewhere/else/opv2v                   # one-off override
     python -m corabench.scripts.train model.cit.strategy=maxout \\
         model.teacher_enabled=false          # ablations, no source edits
 """
@@ -52,10 +54,12 @@ def main() -> None:
             {"pipeline": train_noise} if train_noise else None,
             fps=fps, seed=int(cfg["seed"]))
         train_set = build_cora_dataset(
-            ds_cfg, grid, build_adapters(ds_cfg, ds_cfg.get("train_split")),
+            ds_cfg, grid, build_adapters(ds_cfg, ds_cfg.get("train_split"),
+                                         cfg.get("data_root")),
             train_bridge)
         val_set = build_cora_dataset(
-            ds_cfg, grid, build_adapters(ds_cfg, ds_cfg.get("val_split")),
+            ds_cfg, grid, build_adapters(ds_cfg, ds_cfg.get("val_split"),
+                                         cfg.get("data_root")),
             None)
 
         model = build_model(cfg, grid).to(device)

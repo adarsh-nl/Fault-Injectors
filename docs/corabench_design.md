@@ -201,7 +201,7 @@ corabench/
 ├── slurm/
 │   ├── train.sbatch                  # ps,main-gpu partition template
 │   ├── benchmark_array.sbatch        # job array over sweep grid
-│   └── README.md                     # UT HPC specifics (modules, /deepstore, /local)
+│   └── README.md                     # UT HPC specifics (modules, $CPBENCH_DATA_ROOT, /local)
 └── tests/
     ├── conftest.py                   # tiny synthetic cooperative batches
     ├── test_encoder.py  test_cit.py  test_lc.py  test_cssm.py  test_pac.py
@@ -521,7 +521,8 @@ Paper reproduction =  three predefined experiment configs:
 
 On HPC each grid cell is one SLURM array task (`slurm/benchmark_array.sbatch`,
 partition `ps,main-gpu`); results merge by experiment_id. Datasets are read from
-`/deepstore/datasets/...`, staged to `/local` node scratch at job start.
+`$CPBENCH_DATA_ROOT` (cpbench/utils/paths.py), staged to `/local` node
+scratch at job start.
 
 ---
 

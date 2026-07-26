@@ -269,7 +269,7 @@ cobevtbench/
 │   │   ├── fusebevt_cvt.yaml             FuseBEVT on a CVT backbone (paper row 59.0)
 │   │   └── ablation_{local_only,global_only,neither}.yaml   paper §7.3
 │   ├── dataset/
-│   │   ├── opv2v_camera.yaml       /deepstore/datasets/... , 4 cams, 512x512
+│   │   ├── opv2v_camera.yaml       ${data_root}/opencood/opv2v, 4 cams, 512x512
 │   │   ├── opv2v_lidar.yaml
 │   │   └── synthetic_camera.yaml   no-download default
 │   ├── faults/
@@ -845,7 +845,7 @@ Following the established `slurm/` conventions: `#SBATCH --partition=ps,main-gpu
 `--gres=gpu:1`, `slurm-%x-%A_%a.out`, `module purge` then
 `nvidia/cuda-12.4 || nvidia/cuda-11.8`, self-bootstrapping `$REPO/.venv-hpc`,
 `SCRATCH=/local/$USER/$SLURM_JOB_ID`, datasets read-only under
-`/deepstore/datasets/...`, `export CUBLAS_WORKSPACE_CONFIG=":4096:8"`,
+`$CPBENCH_DATA_ROOT`, `export CUBLAS_WORKSPACE_CONFIG=":4096:8"`,
 `set -euo pipefail`, `srun "$VENV/bin/python" -m cobevtbench.scripts.<entry>`.
 
 Three jobs: `train_camera.sbatch` (GPU, long), `train_lidar.sbatch` (GPU),
@@ -899,7 +899,7 @@ tensor shapes, and the extension points.
      plumbed through the CLIs.
    - `tests/test_opv2v_wiring.py` writes a real-format OPV2V fixture to disk
      and proves a parsed frame flows into a CoBEVT batch and through the
-     model. **Value-level validation against the real `/deepstore` camera
+     model. **Value-level validation against the real staged camera
      split remains** — the one check that needs the actual calibration, to
      confirm the extrinsic convention matches SinBEVT's ray geometry.
 

@@ -1,7 +1,7 @@
 # DAIR-V2X-C (vehicle + infrastructure) via src.datasets.DairV2XDataset.
 name: dair_v2x
 adapter: dair-v2x
-root: /deepstore/datasets/dair-v2x/cooperative-vehicle-infrastructure
+root: ${data_root}/air-thu/dair-v2x-c
 train_split: null                        # DAIR adapter takes one root
 val_split: null
 test_split: null

@@ -27,6 +27,7 @@ from cpbench.faults.bridge import DataFaultBridge
 from cpbench.logbook.env import capture_environment, seed_everything
 from cpbench.logbook.experiment import ExperimentLogger
 from cpbench.logbook.schema import ExperimentMeta
+from cpbench.utils.paths import require_dataset_root
 from ..models.cora import CoRAModel
 from cpbench.observation.recorders import DriftTap, StatsTap, TensorDumpTap
 from cpbench.observation.taps import TapSet
@@ -49,8 +50,13 @@ def build_grid(ds_cfg: Dict[str, Any]) -> GridSpec:
 
 
 def build_adapters(ds_cfg: Dict[str, Any],
-                   split: Optional[str]) -> List[Any]:
-    """Instantiate `src.datasets` adapters for one split."""
+                   split: Optional[str],
+                   cfg_data_root: Optional[str] = None) -> List[Any]:
+    """Instantiate `src.datasets` adapters for one split.
+
+    ``cfg_data_root`` is the resolved ``data_root`` value, passed only so a
+    missing-path error can say which rule produced the path it tried.
+    """
     adapter = ds_cfg["adapter"]
     if adapter == "synthetic":
         seed = {"train": 0, "validate": 1, "test": 2}.get(split or "test", 2)
@@ -59,13 +65,8 @@ def build_adapters(ds_cfg: Dict[str, Any],
             n_agents=int(ds_cfg.get("n_agents", 3)),
             n_objects=int(ds_cfg.get("n_objects", 4)),
             seed=seed)]
-    root = Path(ds_cfg["root"])
-    if not root.is_dir():
-        raise FileNotFoundError(
-            f"dataset root {root} does not exist on this machine. The value "
-            f"in configs/dataset/{ds_cfg['name']}.yaml is a placeholder -- "
-            f"override it: dataset.root=/path/to/your/{adapter} "
-            f"(on the UT HPC the data is read-only under /deepstore/datasets)")
+    root = require_dataset_root(ds_cfg["root"], config_value=cfg_data_root,
+                                what=f"{ds_cfg['name']} dataset")
     if adapter in ("opv2v", "v2xset"):
         split_dir = root / split if split else root
         if not split_dir.is_dir():

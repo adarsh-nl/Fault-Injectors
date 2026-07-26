@@ -11,9 +11,16 @@ partitions and specifics: <https://hpc.wiki.utwente.nl/eemcs-hpc:specifics#parti
 - Use your AD account in lowercase (`nanjaiyalathaa`).
 - Partitions for the PS resources: `ps,main-gpu` (GPU) and `ps,main-cpu`
   (CPU-only). CoBEVT training needs a GPU; the fault sweep can run either.
-- Datasets are **read-only** under `/deepstore/datasets/...`. Results go to
-  `$HOME`; per-node scratch is `/local/$USER/$SLURM_JOB_ID` and is deleted at
-  the end of each job.
+- Datasets are **read-only**, and every path derives from the
+  `CPBENCH_DATA_ROOT` environment variable — set it once for the machine
+  (on this cluster: `/datasets/eemcs/ps/cv`) instead of passing
+  `dataset.root=` per job. Layout and precedence: `cpbench/utils/paths.py`.
+
+  ```bash
+  export CPBENCH_DATA_ROOT=/path/to/your/datasets
+  ```
+- Results go to `$HOME`; per-node scratch is `/local/$USER/$SLURM_JOB_ID` and
+  is deleted at the end of each job.
 - Jobs are non-interactive by preference. These scripts take no input.
 
 ## Setup
@@ -83,5 +90,5 @@ The array's per-family SLURM logs are `slurm-cobevt-bench-<A>_<task>.out`.
   and `max_dumps`, but budget the space. `taps=stats` is the safe default for
   a full sweep.
 - No real OPV2V adapter ships here — `dataset=opv2v_camera` needs a
-  `src.datasets` adapter wired to the data on `/deepstore`. Synthetic
-  datasets run out of the box.
+  `src.datasets` adapter wired to the data under `$CPBENCH_DATA_ROOT`.
+  Synthetic datasets run out of the box.

@@ -7,6 +7,11 @@ defaults:
   taps: none
   trainer: default
 
+# Base directory every dataset path derives from. null means: take
+# $CPBENCH_DATA_ROOT if set, else the built-in default. Never hardcode an
+# absolute dataset path in a group file -- see cpbench/utils/paths.py.
+data_root: null
+
 experiment_name: ${model.name}_${dataset.name}_${faults.name}
 paper: "V2X-ViT (arXiv:2203.10638, ECCV 2022)"
 seed: 2022

@@ -1,7 +1,8 @@
-# Paper section VI-A. On the UT cluster these live under /deepstore/datasets.
+# Paper section VI-A. `root` derives from data_root (cpbench/utils/paths.py);
+# set $CPBENCH_DATA_ROOT for the machine rather than editing this line.
 name: opv2v
 adapter: opv2v
-root: /deepstore/datasets/OPV2V
+root: ${data_root}/opencood/opv2v
 split: test
 fps: 10.0
 grid:

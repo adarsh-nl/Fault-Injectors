@@ -1,9 +1,9 @@
-# OPV2V camera track (Xu et al.). Paths are read-only on the UT HPC deepstore;
-# override dataset.root on other machines.
+# OPV2V camera track (Xu et al.). `root` derives from data_root
+# (cpbench/utils/paths.py): set $CPBENCH_DATA_ROOT per machine.
 name: opv2v_camera
 adapter: opv2v
 track: camera
-root: /deepstore/datasets/course/adas/opv2v
+root: ${data_root}/opencood/opv2v
 split: {train: train, val: validate, test: test}
 fps: 10.0
 n_cameras: 4

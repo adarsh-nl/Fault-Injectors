@@ -7,7 +7,7 @@
 name: opv2v_camera
 adapter: opv2v
 track: camera
-root: /deepstore/datasets/course/adas/opv2v
+root: ${data_root}/opencood/opv2v
 split: {train: train, val: validate, test: test}
 scenarios: null
 fps: 10.0

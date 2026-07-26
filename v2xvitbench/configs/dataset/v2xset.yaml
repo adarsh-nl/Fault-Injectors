@@ -9,7 +9,7 @@
 name: v2xset
 adapter: v2xset
 track: lidar
-root: /deepstore/datasets/course/adas/v2xset
+root: ${data_root}/opencood/v2xset
 split: {train: train, val: validate, test: test}
 scenarios: null              # null = every scenario directory in the split
 fps: 10.0
