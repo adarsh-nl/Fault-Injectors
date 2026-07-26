@@ -40,6 +40,7 @@ fused kernel; set pool=1 to scan at full resolution.
 from __future__ import annotations
 
 import logging
+import math
 from typing import Optional, Tuple
 
 import torch
@@ -168,7 +169,8 @@ class CSSM(nn.Module):
 
     def __init__(self, channels: int, d_inner: int = 64, d_state: int = 16,
                  scan: str = "cross2d", pool: int = 2,
-                 backend: str = "reference", chunk: int = 64) -> None:
+                 backend: str = "reference", chunk: int = 64,
+                 dt_init: str = "constant") -> None:
         super().__init__()
         if scan not in ("cross2d", "raster"):
             raise ValueError(f"unknown scan mode: {scan!r}")
@@ -193,8 +195,48 @@ class CSSM(nn.Module):
             torch.log(torch.arange(1, d_state + 1).float())
             .repeat(d_inner, 1))                       # A = -exp(a_log) < 0
         self.d_skip = nn.Parameter(torch.ones(d_inner))
-        nn.init.constant_(self.dt_proj.bias, -2.0)     # softplus ~= 0.13
+        self._init_dt_bias(dt_init, d_inner)
         self.out_proj = nn.Conv2d(d_inner, channels, 1, bias=False)
+
+    def _init_dt_bias(self, mode: str, d_inner: int,
+                      dt_min: float = 1e-3, dt_max: float = 1e-1,
+                      dt_floor: float = 1e-4, seed: int = 2026) -> None:
+        """Initialise ``dt_proj.bias``; the ONLY thing dt_init changes.
+
+        ``'constant'`` reproduces the original ``bias = -2.0``. That gives
+        ``softplus(-2.0) = 0.1269``, already above Mamba's ``dt_max = 0.1``
+        before the weight term is added at all.
+
+        ``'mamba'`` follows the reference ``dt_init``: sample
+        ``dt ~ exp(U(log dt_min, log dt_max))``, floor it, and set the bias to
+        the inverse softplus ``dt + log(-expm1(-dt))``, so ``softplus(bias)``
+        lands inside ``[dt_min, dt_max]`` by construction.
+
+        The WEIGHT is deliberately left alone. ``nn.Linear``'s default
+        kaiming-uniform bound is ``1/sqrt(fan_in) = d_inner**-0.5``, which is
+        already exactly Mamba's ``dt_init_std = dt_rank**-0.5 * dt_scale`` at
+        ``dt_scale = 1``. Re-initialising it would draw from the global RNG
+        and shift every module constructed afterwards, so a dt_init run would
+        differ from its baseline in far more than dt_proj -- which is the one
+        thing this experiment must not do.
+
+        Sampling likewise uses a LOCAL generator, so the global stream is
+        untouched and every other parameter stays bit-identical.
+        """
+        if mode == "constant":
+            nn.init.constant_(self.dt_proj.bias, -2.0)
+            return
+        if mode != "mamba":
+            raise ValueError(f"unknown dt_init: {mode!r}; expected "
+                             "'constant' or 'mamba'")
+        gen = torch.Generator().manual_seed(seed)
+        dt = torch.exp(
+            torch.rand(d_inner, generator=gen)
+            * (math.log(dt_max) - math.log(dt_min)) + math.log(dt_min)
+        ).clamp(min=dt_floor)
+        inv_dt = dt + torch.log(-torch.expm1(-dt))     # inverse softplus
+        with torch.no_grad():
+            self.dt_proj.bias.copy_(inv_dt)
 
     # -- sequence orderings -------------------------------------------------
 

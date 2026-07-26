@@ -19,6 +19,13 @@ cssm:
   d_inner: 64
   d_state: 16
   scan: cross2d                  # cross2d | raster        (A9)
+  # dt_proj bias init. 'constant' is the original -2.0 (softplus 0.127, above
+  # Mamba's dt_max before the weight term is even added); 'mamba' is the
+  # reference dt_init, inverse-softplus of dt ~ exp(U(log 1e-3, log 1e-1)).
+  # Default stays 'constant' so prior runs remain reproducible from config
+  # alone -- see RECON-4. Only the BIAS changes; the weight is already at
+  # Mamba's dt_init_std.
+  dt_init: constant              # constant | mamba        (RECON-4)
   pool: 2                        # scan at H/pool x W/pool; 1 = full res
   backend: reference             # reference | cuda (mamba-ssm)
 

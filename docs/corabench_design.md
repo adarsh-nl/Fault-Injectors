@@ -311,11 +311,36 @@ confirming them:
 
 **Status: the mechanism is measured, not settled.** This is synthetic — a
 576-position sequence against OPV2V's 8800, different feature statistics, and
-the same `dt_proj` init. The real reading (`lc/ssm_logE_*` on the next OPV2V
-run) is what decides whether the integrator band is populated at scale. Until
-then the honest statement is: **saturation is confirmed and substantial
-(~46%), the integrator regime is unobserved, and Δ's magnitude is the common
-driver of both the saturation and the step-to-step amplification.**
+the same `dt_proj` init. **The integrator band may still populate on the real
+8800-position sequence, and if it does, the clamp fix is needed as well as the
+Δ fix** — the two defects are independent and only the real
+`lc/ssm_logE_integrator` reading separates them. Until then the honest
+statement is: **saturation is confirmed and substantial (~46%), the
+integrator regime is unobserved, and Δ's magnitude is the common driver of
+both the saturation and the step-to-step amplification.**
+
+**The Δ fix, and what it does not fix.** `dt_init: mamba` (config key
+`model.cssm.dt_init`, default `constant` so prior runs stay reproducible)
+sets `dt_proj.bias` to the inverse softplus of `dt ~ exp(U(log 1e-3, log
+1e-1))`. Only the bias changes: `nn.Linear`'s default kaiming-uniform bound is
+`1/sqrt(fan_in) = d_inner**-0.5`, already exactly Mamba's `dt_init_std`, and
+re-drawing it would perturb the global RNG and every module built afterwards.
+Measured effect at 549227's feature scale:
+
+| | `constant` | `mamba` |
+|---|---|---|
+| Δ p50 | 0.128 | **0.011** |
+| Δ p95 | 0.523 | **0.126** |
+| Δ **amax** | 2.42 | **1.65** |
+| horizon p50 | 1.09 | **13.8** positions |
+| horizon p95 | 9.76 | **290** positions |
+
+The bulk moves into `[dt_min, dt_max]`; **the maximum does not**, because
+`weight·x` (amax 4.33 at this feature scale) still dominates the bias in the
+tail. With `|A| ≤ 16` that leaves `dA ≈ −26` at the extreme, which still
+saturates a 64-position chunk in two steps. So `dt_init` is expected to shift
+mass from `saturated` into `healthy` and to populate `integrator` for the
+first time — not to empty the saturated band.
 
 **Second, independent defect: Δ is not initialised.** Mamba's reference
 `dt_init` samples `dt ~ exp(U(log dt_min, log dt_max))` with
