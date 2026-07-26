@@ -20,13 +20,15 @@ state between chunks (numerically bounded; no Python loop over timesteps).
 Backend 'cuda' delegates to `mamba-ssm`'s fused kernel when installed.
 
 PRECISION: the reference scan is run in float32 with autocast explicitly
-disabled, even when the surrounding model is in AMP. The closed form divides
-by the decay term E, whose exponent is clamped at -30, so the intermediate
-`b / E` reaches ~1e13. float16 tops out at 65504, so under autocast that
-intermediate overflows to inf, f_out becomes inf, the distillation loss
-explodes and GradScaler then skips every step -- a failure that presents as
-"the model does not learn" rather than as a crash. Casting back to the
-caller's dtype at the boundary keeps the rest of the model in AMP.
+disabled, even when the surrounding model is in AMP, and casts back to the
+caller's dtype at the boundary so the rest of the model stays in AMP.
+
+The scan uses the DIVIDE-FREE (SSD) chunked form: within a chunk it forms the
+pairwise decay exp(logE_t - logE_s) directly, which is bounded by 1 for
+s <= t, instead of the b/E closed form it replaces. That form divided by a
+decay term clamped at -30, and the clamp broke the identity it guarded --
+against a float64 reference it returned 381.3 where the truth is 139.8, a
+relative error of 2.68. See _chunked_selective_scan and RECON-4.
 
 2-D scanning: 'cross2d' (VMamba-style: 4 directions -- row-major, reversed,
 column-major, reversed -- averaged; assumption A9) or 'raster' (single pass).
@@ -52,102 +54,156 @@ from cpbench.observation.taps import TapProtocol, emit
 logger = logging.getLogger(__name__)
 
 
+def _scan_chunk(xc: torch.Tensor, dc: torch.Tensor, Bc: torch.Tensor,
+                A: torch.Tensor, h: torch.Tensor) -> torch.Tensor:
+    """One chunk of the divide-free (SSD) recurrence. Returns hc (Bt,Lc,D,N).
+
+    Computes exactly the same recurrence as the closed form it replaces:
+
+        h_t = E_t * (h_0 + sum_{s<=t} b_s / E_s)
+            = exp(logE_t) * h_0 + sum_{s<=t} exp(logE_t - logE_s) * b_s
+
+    but never forms 1/E. Since logE is a cumulative sum of dA = delta*A with
+    A < 0 and delta > 0, logE is non-increasing, so for s <= t the pairwise
+    exponent (logE_t - logE_s) is ALWAYS <= 0 and its exponential is bounded
+    by 1. Nothing can overflow, and no clamp is needed: a decay span that
+    underflows simply gives 0, which is the correct answer -- forget
+    completely -- rather than the clamped form's E_t/E_s == 1, forget nothing.
+
+    The clamp(max=0.0) is a guard for the s > t half of the pairwise matrix
+    only, which the causal mask then zeroes; on the s <= t half it is inactive
+    and passes gradient unchanged.
+    """
+    lc = xc.shape[1]
+    logE = (dc.unsqueeze(-1) * A).cumsum(dim=1)              # (Bt, Lc, D, N)
+    b = (dc * xc).unsqueeze(-1) * Bc.unsqueeze(2)            # (Bt, Lc, D, N)
+    ldiff = logE.unsqueeze(2) - logE.unsqueeze(1)            # (Bt,Lc_t,Lc_s,D,N)
+    causal = torch.ones(lc, lc, dtype=torch.bool,
+                        device=xc.device).tril()[None, :, :, None, None]
+    # MASK IN LOG SPACE, BEFORE THE EXP. For s > t the exponent
+    # logE_t - logE_s is POSITIVE and can be large (it reached +1200 in a
+    # constructed check), so `exp(ldiff) * mask` overflows to inf and then
+    # inf * 0 = nan -- the same overflow-then-mask trap as the fp16 focal
+    # clamp and the asin clamp. Filling with -inf first makes exp yield an
+    # exact 0 with a 0 gradient, and nothing large is ever materialised.
+    decay = torch.exp(ldiff.masked_fill(~causal, float("-inf")))
+    intra = torch.einsum("btsdn,bsdn->btdn", decay, b)
+    return torch.exp(logE) * h.unsqueeze(1) + intra
+
+
 def _chunked_selective_scan(x: torch.Tensor, delta: torch.Tensor,
                             A: torch.Tensor, B: torch.Tensor,
-                            C: torch.Tensor, chunk: int = 64) -> torch.Tensor:
-    """Exact selective scan, chunked closed form.
+                            C: torch.Tensor, chunk: int = 64,
+                            collect_stats: bool = True,
+                            checkpoint_chunks: bool = True):
+    """Exact selective scan, divide-free chunked (SSD) form.
 
     Shapes: x, delta (Bt, L, D); A (D, N); B, C (Bt, L, N).
-    Returns ``(y, clamped_fraction)``: y is (Bt, L, D); clamped_fraction is a
-    0-d tensor giving the share of cumulative log-decay entries pinned at the
-    -30 floor, for the ``lc/ssm_logE_clamped`` tap.
+    Returns ``(y, stats)``: y is (Bt, L, D); stats is a dict of 0-d diagnostic
+    tensors for the ``lc/ssm_*`` taps.
 
-    Within a chunk:  h_t = E_t * (h_0 + sum_{s<=t} b_s / E_s)  with
-    E_t = exp(cumsum(delta*A)) decaying, exponents clamped to keep 1/E finite.
+    WHY THIS REPLACED THE b/E CLOSED FORM. The previous implementation
+    computed ``acc = cumsum(b / E)`` and then ``hc = E * (h + acc)``. That is
+    algebraically the same recurrence, but it forms 1/E, which required
+    clamping logE at -30 to keep the division finite -- and the clamp broke
+    the identity it was guarding: once logE_t and logE_s are both pinned,
+    E_t/E_s evaluates to exactly 1, so the chunk stops forgetting instead of
+    forgetting completely.
 
-    NOTE the clamp is a correctness defect, not a guard -- see RECON-4 in
-    docs/corabench_design.md. It exists only because this form divides by E;
-    once logE_t and logE_s are both pinned, E_t/E_s reads as exactly 1 and the
-    recurrence degenerates from near-total forgetting into NO forgetting, an
-    undamped sum over the whole sequence. Deliberately unchanged for now:
-    the tap measures how much of the scan is affected before anything moves.
+    It was not merely fragile, it was WRONG. Against a float64 reference at
+    the regime of job 549449 (delta pinned at 0.2 by dt_max, A = -[1..16],
+    x at the observed z_fused scale), the b/E form returns amax 381.3 where
+    the true value is 139.8 -- a RELATIVE ERROR OF 2.68, i.e. 268% -- while
+    this form returns 139.775 with relative error 3.1e-07, which is fp32
+    round-off. The 2.7x inflation it manufactured is what drove ssm_out past
+    the fp16 ceiling at the island exit.
+
+    So this is a CORRECTNESS fix, not a numerical workaround. It computes the
+    same mathematics correctly, where the previous form computed it wrongly.
+
+    MEMORY. The pairwise decay is (Bt, Lc, Lc, D, N) -- 32 MB per chunk at
+    Lc=64 on the OPV2V grid, and autograd saves the clamp input and the exp
+    output as well, so the naive cost across 138 chunks x 4 directions is well
+    past the 46 GB card. ``checkpoint_chunks`` recomputes each chunk in the
+    backward instead of storing it, which caps the scan at roughly one chunk
+    of live pairwise state (~100 MB) for about 2x the scan compute -- and the
+    scan is a small fraction of step time, so that is nearly free.
+
+    Statistics are gathered OUTSIDE the checkpointed region, from a cheap
+    no-grad recomputation of logE and b (0.5 MB each, no pairwise tensor).
+    Collecting them inside would DOUBLE-COUNT: checkpointing runs the forward
+    twice, once under no_grad and again during backward.
     """
     bt, L, d = x.shape
     n = A.shape[1]
     h = x.new_zeros((bt, d, n))
     ys = []
-    # Three-band census of the cumulative log-decay. The two pathological
-    # regimes are OPPOSITE tails that coexist in one tensor, because logE is
-    # per (D, N) and both delta and |A| vary across it:
-    #   saturated  (logE <= -30)     pinned at the floor. E_t/E_s reads as 1
-    #                                so the chunk stops forgetting -- but
-    #                                h = E_last*(h_prev+acc) ANNIHILATES the
-    #                                carried state, so this accumulation is
-    #                                bounded by `chunk`, not by L.
-    #   healthy    (-30 < logE < -0.01)  real decay.
-    #   integrator (logE >= -0.01)   E ~ 1, nothing decays and nothing is
-    #                                annihilated at the boundary, so the state
-    #                                integrates across EVERY chunk -- an
-    #                                L-fold accumulator. This is correct SSM
-    #                                math for delta -> 0, and it is precisely
-    #                                what Mamba's dt_init (dt_min = 0.001)
-    #                                exists to prevent.
-    # Accumulated as TENSORS, never .item(), so the chunk loop stays free of
-    # device syncs: one `.item()` per chunk costs 552 syncs per forward here
-    # (138 chunks x 4 directions) and dominated the step time when it was
-    # first written this way.
+
+    # Three-band census of the cumulative log-decay, plus internal magnitudes.
+    # Accumulated as TENSORS, never .item(), so the loop stays sync-free.
     n_sat = x.new_zeros(())
     n_int = x.new_zeros(())
     n_total = 0
-    # Decay horizon is a property of dA alone, so it is computed once over the
-    # whole sequence rather than per chunk -- (Bt, L, D, N) under no_grad.
-    with torch.no_grad():
-        inv = (1.0 / (delta.unsqueeze(-1) * A).abs().clamp(min=1e-12)).flatten()
-        # kthvalue, NOT quantile: torch.quantile refuses tensors above 2**24
-        # elements ("input tensor is too large") and this one is
-        # Bt*L*D*N = 2*8800*64*16 = 18.0M on the OPV2V grid. That limit is not
-        # hit on the 576-position synthetic grid (1.18M), so it passed every
-        # local check and then killed jobs 549332/549333 in the first forward
-        # with an empty stderr. median() has no such limit; kthvalue is exact
-        # and costs ~0.4 s on 18M.
-        horizon_p50 = inv.median()
-        horizon_p95 = torch.kthvalue(
-            inv, max(1, int(0.95 * inv.numel()))).values
-        del inv
-    for s in range(0, L, chunk):
-        xc = x[:, s:s + chunk]                                   # (Bt, Lc, D)
-        dc = delta[:, s:s + chunk]
-        Bc = B[:, s:s + chunk]                                   # (Bt, Lc, N)
-        Cc = C[:, s:s + chunk]
-        dA = dc.unsqueeze(-1) * A                                # (Bt, Lc, D, N)
-        # NOTE the cumsum is over the CHUNK SLICE: logE resets every `chunk`
-        # positions. Any claim about accumulation "over the whole sequence"
-        # must come from the integrator band, where the chunk boundary does
-        # not annihilate h, and never from the saturated band, where it does.
-        raw_logE = dA.cumsum(dim=1)
+    amax_b_term = x.new_zeros(())
+    amax_hc = x.new_zeros(())
+    if collect_stats:
         with torch.no_grad():
-            n_sat += (raw_logE <= -30.0).sum()
-            n_int += (raw_logE >= -0.01).sum()
-            n_total += raw_logE.numel()
-        logE = raw_logE.clamp(min=-30.0, max=0.0)
-        E = torch.exp(logE)
-        b = (dc * xc).unsqueeze(-1) * Bc.unsqueeze(2)            # (Bt, Lc, D, N)
-        # closed form: h_t = E_t * (h_0 + sum_{s<=t} b_s / E_s), E_t = prod a_r
-        acc = (b / E.clamp(min=1e-30)).cumsum(dim=1)
-        hc = E * (h.unsqueeze(1) + acc)                          # (Bt, Lc, D, N)
+            inv = (1.0 / (delta.unsqueeze(-1) * A).abs().clamp(min=1e-12)
+                   ).flatten()
+            # kthvalue, NOT quantile: quantile refuses tensors above 2**24
+            # elements and this one is 18.0M on the OPV2V grid (job 549332).
+            horizon_p50 = inv.median()
+            horizon_p95 = torch.kthvalue(
+                inv, max(1, int(0.95 * inv.numel()))).values
+            del inv
+    else:
+        horizon_p50 = x.new_zeros(())
+        horizon_p95 = x.new_zeros(())
+
+    use_ckpt = checkpoint_chunks and torch.is_grad_enabled()
+    for s in range(0, L, chunk):
+        xc = x[:, s:s + chunk]
+        dc = delta[:, s:s + chunk]
+        Bc = B[:, s:s + chunk]
+        Cc = C[:, s:s + chunk]
+
+        if collect_stats:
+            with torch.no_grad():
+                logE_ng = (dc.unsqueeze(-1) * A).cumsum(dim=1)
+                n_sat += (logE_ng <= -30.0).sum()
+                n_int += (logE_ng >= -0.01).sum()
+                n_total += logE_ng.numel()
+                b_ng = (dc * xc).unsqueeze(-1) * Bc.unsqueeze(2)
+                amax_b_term = torch.maximum(amax_b_term, b_ng.abs().max())
+                del logE_ng, b_ng
+
+        if use_ckpt:
+            hc = torch.utils.checkpoint.checkpoint(
+                _scan_chunk, xc, dc, Bc, A, h, use_reentrant=False)
+        else:
+            hc = _scan_chunk(xc, dc, Bc, A, h)
+
+        if collect_stats:
+            with torch.no_grad():
+                amax_hc = torch.maximum(amax_hc, hc.abs().max())
+
         ys.append(torch.einsum("bldn,bln->bld", hc, Cc))
         h = hc[:, -1]
+
     total = float(max(n_total, 1))
     sat, integ = n_sat / total, n_int / total
     stats = {
+        # The bands still describe how much of the scan has effectively
+        # forgotten -- but they are now DESCRIPTIVE, not diagnostic of a
+        # defect: with no division there is no clamp and deep decay is simply
+        # correct behaviour.
         "saturated": sat,
         "integrator": integ,
         "healthy": 1.0 - sat - integ,
-        # p50 is paired with p95 deliberately: the integrator regime is a
-        # TAIL, and a median sitting at ~1 position would hide a tail running
-        # past L entirely.
         "horizon_p50": horizon_p50,
         "horizon_p95": horizon_p95,
+        "b_term": amax_b_term,
+        "hc": amax_hc,
     }
     return torch.cat(ys, dim=1), stats
 
@@ -330,16 +386,26 @@ class CSSM(nn.Module):
                     delta = self.dt_max * torch.tanh(delta / self.dt_max)
                 if direction == 0:
                     emit(taps, delta, module="CSSM", location="lc/ssm_delta")
+                # Hoisted out of the call so they can be tapped: these are the
+                # two learned projections whose product the scan is bilinear
+                # in, and the existing taps jump straight from z_fused to
+                # ssm_out with everything between invisible.
+                b_map = self.b_proj(xs32)
+                c_map = self.c_proj(es32)
                 y, scan_stats = _chunked_selective_scan(
-                    xs32, delta, A.float(), self.b_proj(xs32),
-                    self.c_proj(es32), self.chunk)
+                    xs32, delta, A.float(), b_map, c_map, self.chunk,
+                    collect_stats=(direction == 0))
                 if direction == 0:
+                    emit(taps, b_map, module="CSSM", location="lc/ssm_b_proj")
+                    emit(taps, c_map, module="CSSM", location="lc/ssm_c_proj")
                     for key, loc in (
                             ("saturated", "lc/ssm_logE_saturated"),
                             ("healthy", "lc/ssm_logE_healthy"),
                             ("integrator", "lc/ssm_logE_integrator"),
                             ("horizon_p50", "lc/ssm_decay_horizon_p50"),
-                            ("horizon_p95", "lc/ssm_decay_horizon_p95")):
+                            ("horizon_p95", "lc/ssm_decay_horizon_p95"),
+                            ("b_term", "lc/ssm_b_term"),
+                            ("hc", "lc/ssm_hc")):
                         emit(taps, scan_stats[key].reshape(1), module="CSSM",
                              location=loc)
                 y = y + self.d_skip.float() * xs32

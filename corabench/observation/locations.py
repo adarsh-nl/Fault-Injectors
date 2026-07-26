@@ -99,27 +99,43 @@ _ALL: List[Location] = [
          "step-size parameter Delta = softplus(Linear(Z_fused)) (Eq. 8)"),
     _loc("lc/ssm_out", "CSSM", "(B, C, H, W)",
          "selective-scan output X_ssm (Eq. 8)"),
-    # Three-band census of the cumulative log-decay (RECON-4). logE is per
-    # (D, N) and the cumsum resets each chunk, so the two pathological
-    # regimes are opposite tails that coexist in one tensor.
+    # Three-band census of the cumulative log-decay. DESCRIPTIVE since the
+    # divide-free rewrite: there is no clamp and no division, so deep decay is
+    # simply correct behaviour rather than a defect. Kept because the bands
+    # still say how much of the scan has effectively forgotten.
     _loc("lc/ssm_logE_saturated", "CSSM", "(1,) fraction in [0, 1]",
-         "share of logE entries at or below the -30 clamp. E_t/E_s reads as 1 "
-         "so the chunk stops forgetting -- but h = E_last*(h_prev+acc) "
-         "annihilates the carried state, so this accumulation is bounded by "
-         "`chunk` (64), NOT by L"),
+         "share of logE entries at or below -30, i.e. spans that have decayed "
+         "past exp(-30). Under the divide-free form these correctly give a "
+         "pairwise decay of ~0 (forget completely); under the old b/E form "
+         "they were clamped and read as 1 (forget nothing)"),
     _loc("lc/ssm_logE_healthy", "CSSM", "(1,) fraction in [0, 1]",
          "share of logE entries in (-30, -0.01): genuine decay"),
     _loc("lc/ssm_logE_integrator", "CSSM", "(1,) fraction in [0, 1]",
-         "share of logE entries at or above -0.01, i.e. E ~ 1. Nothing decays "
-         "and the chunk boundary does not annihilate h, so the state "
-         "integrates across every chunk -- an L-fold (8800) accumulator that "
-         "turns a 1e-3 parameter step into ~1e3 activation change. Correct "
-         "SSM math for delta -> 0, and exactly what Mamba's dt_init "
-         "(dt_min = 0.001) prevents. THIS is the primary quantity"),
+         "share of logE entries at or above -0.01, i.e. E ~ 1: nothing decays "
+         "and the state integrates across every chunk. Correct SSM math for "
+         "delta -> 0, and what Mamba's dt_init (dt_min = 0.001) bounds"),
     _loc("lc/ssm_decay_horizon_p50", "CSSM", "(1,) positions",
          "median of 1/|dA| = positions until a contribution decays by 1/e. "
          "delta moves during training; |A| is fixed at init, so this tracks "
          "the step size. Mamba's dt range gives 0.6-1000 positions"),
+    # Inside the scan. The other lc taps jump from z_fused (stationary) to
+    # ssm_out (exploding) with the recurrence invisible between, which cannot
+    # separate the two amplification hypotheses. These do.
+    _loc("lc/ssm_b_proj", "CSSM", "(B, L, N)",
+         "b_proj(x) -- the input matrix B. Grows step to step only if the "
+         "bilinear b*c product is the driver (hypothesis 2)"),
+    _loc("lc/ssm_c_proj", "CSSM", "(B, L, N)",
+         "c_proj(z_ego) -- the output matrix C, the second half of the "
+         "bilinear product"),
+    _loc("lc/ssm_b_term", "CSSM", "(1,) amax over the scan",
+         "max|b| where b = (Delta * x) (x) B: the per-position contribution "
+         "entering the recurrence. Compare against ssm_hc to see whether the "
+         "state is amplifying relative to its inputs"),
+    _loc("lc/ssm_hc", "CSSM", "(1,) amax over the scan",
+         "max|hc| where hc = exp(logE)*h_prev + sum_s exp(logE_t - logE_s) "
+         "b_s: the recurrent state and the einsum input. Under the old b/E "
+         "form this was reconstructed via a 1/E intermediate ~1e13 larger "
+         "than either end; it is now computed directly"),
     _loc("lc/ssm_decay_horizon_p95", "CSSM", "(1,) positions",
          "95th percentile of the same. Paired with p50 because the integrator "
          "regime is a TAIL: a median near 1 position would hide a tail "

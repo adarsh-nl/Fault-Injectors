@@ -137,3 +137,130 @@ def test_dt_max_is_a_soft_bound_with_a_live_gradient_where_it_matters():
     assert float(raw.grad[5]) == 0.0, (
         "sech^2 no longer underflows far above the bound -- the docstring's "
         "stated limitation is stale and should be updated")
+
+
+def _float64_reference(x, delta, A, B, C):
+    """Sequential recurrence in float64: h_t = exp(dA_t) h_{t-1} + b_t.
+
+    No chunking, no closed form, no division -- the definition itself, at a
+    precision where fp32 error cannot hide. This is the arbiter.
+    """
+    x, delta, A, B, C = (t.double() for t in (x, delta, A, B, C))
+    bt, length, d = x.shape
+    h = torch.zeros(bt, d, A.shape[1], dtype=torch.float64)
+    ys = []
+    for t in range(length):
+        dA = delta[:, t].unsqueeze(-1) * A
+        b = (delta[:, t] * x[:, t]).unsqueeze(-1) * B[:, t].unsqueeze(1)
+        h = torch.exp(dA) * h + b
+        ys.append(torch.einsum("bdn,bn->bd", h, C[:, t]))
+    return torch.stack(ys, 1)
+
+
+def test_scan_is_correct_at_the_549449_regime():
+    """The regime that broke job 549449, against a float64 arbiter.
+
+    Delta pinned at 0.2 by dt_max, A = -[1..16], x at the z_fused scale
+    actually observed (~22). |dA| reaches 3.2, so logE crosses -30 at position
+    ~9 of every 64-chunk and the old b/E form ran mostly on its clamp.
+
+    FINITENESS IS NOT THE DISCRIMINATOR -- this was measured. The old form's
+    backward at this regime is finite (grad amax ~26) because the 1/E and E
+    factors cancel along the graph. What it does instead is compute the WRONG
+    ANSWER: 381.3 against a true 139.8, a relative error of 2.68. That 2.7x
+    inflation is what drove ssm_out past the fp16 ceiling at the island exit.
+
+    So the assertion is accuracy, not health. Written against the b/E form
+    first and observed to fail at rel err 2.68 before the rewrite landed.
+    """
+    torch.manual_seed(0)
+    bt, length, d, n = 1, 192, 8, 16          # 3 chunks of 64
+    x = torch.randn(bt, length, d) * 22.0     # observed z_fused scale
+    delta = torch.full((bt, length, d), 0.2)  # pinned by dt_max
+    A = -torch.arange(1, n + 1, dtype=torch.float32).repeat(d, 1)
+    B, C = torch.randn(bt, length, n), torch.randn(bt, length, n)
+
+    logE_min = float((delta.unsqueeze(-1) * A).min()) * 64
+    assert logE_min < -30.0, "regime no longer crosses the -30 decay depth"
+
+    reference = _float64_reference(x, delta, A, B, C)
+    got, _ = _chunked_selective_scan(x, delta, A, B, C, chunk=64)
+
+    rel = float((got.double() - reference).abs().max()
+                / reference.abs().max())
+    assert rel < 1e-5, (
+        f"scan disagrees with the float64 reference by rel {rel:.3e}; the b/E "
+        f"closed form scored 2.68 here (381.3 against a true 139.8)")
+
+
+def test_scan_gradient_is_finite_and_bounded_at_the_549449_regime():
+    """Complement to the accuracy test: the backward must also stay sane."""
+    torch.manual_seed(0)
+    bt, length, d, n = 1, 192, 8, 16
+    x = torch.randn(bt, length, d, requires_grad=True) * 22.0
+    x.retain_grad()
+    delta = torch.full((bt, length, d), 0.2)
+    A = -torch.arange(1, n + 1, dtype=torch.float32).repeat(d, 1)
+    B, C = torch.randn(bt, length, n), torch.randn(bt, length, n)
+
+    y, _ = _chunked_selective_scan(x, delta, A, B, C, chunk=64)
+    y.abs().sum().backward()
+
+    assert torch.isfinite(y).all() and torch.isfinite(x.grad).all()
+    # The island casts back to fp16 on exit; a gradient that only survives in
+    # fp32 would still become inf there.
+    assert torch.isfinite(x.grad.half()).all(), \
+        "gradient does not survive the float16 cast at the island boundary"
+
+
+def test_inter_chunk_carry_error_does_not_accumulate():
+    """The carry runs 138 times on the real grid; test it at that order.
+
+    The reference-agreement test uses chunk=7 on L=41, so it does exercise
+    the carry -- but only across 5 boundaries. The real OPV2V scan is 8800
+    positions at chunk=64: 138 chunks, 137 boundaries. If per-boundary error
+    compounded, a 3-chunk test would never show it.
+
+    Measured flat: 3.3e-07 at 0 boundaries, 6.4e-07 at 63.
+    """
+    torch.manual_seed(0)
+    bt, d, n = 1, 8, 16
+    prev = None
+    for length in (64, 1024, 4096):                  # 1, 16, 64 chunks
+        x = torch.randn(bt, length, d) * 22.0
+        delta = torch.full((bt, length, d), 0.2)
+        A = -torch.arange(1, n + 1, dtype=torch.float32).repeat(d, 1)
+        B, C = torch.randn(bt, length, n), torch.randn(bt, length, n)
+        got, _ = _chunked_selective_scan(x, delta, A, B, C, chunk=64)
+        reference = _float64_reference(x, delta, A, B, C)
+        rel = float((got.double() - reference).abs().max()
+                    / reference.abs().max())
+        assert rel < 1e-5, f"L={length}: rel err {rel:.3e}"
+        prev = rel if prev is None else prev
+    assert rel < 10 * prev, (
+        f"carry error grew from {prev:.3e} at 1 chunk to {rel:.3e} at 64 -- "
+        f"it must stay flat, since the real grid runs 138")
+
+
+def test_causal_mask_is_applied_in_log_space_before_the_exp():
+    """For s > t the exponent is POSITIVE and can be huge.
+
+    logE_t - logE_s > 0 above the diagonal, and it reached +1200 in a
+    constructed check. `exp(ldiff) * mask` therefore overflows to inf and then
+    inf * 0 = nan -- the overflow-then-mask trap, third cousin of the fp16
+    focal clamp and the asin clamp. Masking in log space first makes exp yield
+    an exact zero and never materialises anything large.
+    """
+    lc = 4
+    logE = torch.tensor([[0., -400., -800., -1200.]]).reshape(1, 4, 1, 1)
+    ldiff = logE.unsqueeze(2) - logE.unsqueeze(1)
+    causal = torch.ones(lc, lc, dtype=torch.bool).tril()[None, :, :, None, None]
+
+    assert float(ldiff.max()) > 700.0, "regime no longer overflows a naive exp"
+    naive = torch.exp(ldiff) * causal
+    assert not torch.isfinite(naive).all(), \
+        "post-exp masking no longer overflows; this test has lost its point"
+
+    correct = torch.exp(ldiff.masked_fill(~causal, float("-inf")))
+    assert torch.isfinite(correct).all()
+    assert bool((correct[0, :, :, 0, 0].triu(1) == 0).all())
