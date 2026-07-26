@@ -31,15 +31,39 @@
 #                    or normalisation is the next variable to move
 # Read it from taps.csv, location lc/output, column amax, against step.
 #
+# FALSIFIABLE PREDICTION -- check this FIRST, at step 0, before anything else.
+#
+# PAC's classifier (fusion/pac.py fuse_cls) now carries the -4.59 focal prior
+# it never had. With near-zero default weights cls_out ~ -4.59, so
+# sigmoid(cls) = 0.01, and the focal loss consumes the recalibrated product
+# sigmoid(cls) * sigmoid(-U) = 0.01 * 0.437 = 0.00437 (U at its own default
+# init, observed mean +0.255 in 547612). Then per positive anchor
+#   0.25 * (1 - 0.00437)^2 * (-log 0.00437) = 1.347
+# and all 70356 negatives together contribute ~1e-4 after dividing by
+# n_pos = 44.2 (MEASURED from the data, not assumed).
+#
+#   cls_pac       should be 1.34 - 1.36   (was ~47.6)
+#   cls  (logged) should be ~3.6          (1.13 + 1.13 + 1.35; was 50.11)
+#   pac  (logged) should be ~1.55 - 1.65  (NOT 1.35 -- the logged `pac`
+#                 column is cls_pac + reg_weight*reg_pac with reg_weight=2,
+#                 and reg_pac ~ 0.115 at step 0, so it sits ~0.23 above
+#                 cls_pac. Reading 1.58 as a miss would be a false alarm.)
+#
+# Anything outside those bands means the chain is not what the taps imply and
+# the analysis behind this fix is wrong somewhere.
+#
 # grad_norm_by_module (new column in metrics.csv) answers the ownership
-# question the global norm cannot: whether AdaptiveFusion drives the growth
+# question the global norm cannot: whether AdaptiveFusion drives the LC growth
 # THROUGH lc or lc originates it. Expect adaptive to dominate -- on synthetic
-# it holds 401 of a 417 global norm at step 0 -- because PAC's classifier
-# (fusion/pac.py:112, a plain Conv2d) never receives the -4.59 focal prior
-# that DetectionHead applies, so PAC starts at p_bg ~ 0.25 and contributes
-# ~47.7 of the ~50.1 step-0 cls loss while local and lc contribute ~1.13 each.
-# That missing prior is a SEPARATE, UNFIXED defect; this run does not address
-# it and should not be read as if it did.
+# it holds 401 of a 417 global norm at step 0 -- though that proxy predates
+# the PAC prior, which should shrink adaptive's share substantially since much
+# of that gradient was the uncertainty net straining to suppress an
+# over-confident PAC branch (uncertainty_pac mean went +0.25 -> +11.4).
+#
+# The bias does NOT fix the underlying defect: PAC multiplies LOGITS by
+# sigmoid gates, so a closing gate drives the logit to 0, i.e. p -> 0.5, the
+# opposite of its semantic role. See the RECON note "gate composition in
+# logit space" in docs/corabench_design.md. Recorded, deliberately unfixed.
 #
 # Expect ~3.6 min of training (210 steps at ~1.02 s) plus ~40 s validation.
 #SBATCH --job-name=cora-lossfix
@@ -47,6 +71,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --gres=gpu:1
+#SBATCH --constraint=l40      # see CLAUDE.md: main-gpu spans Turing/Ampere/Lovelace
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=48G
 #SBATCH --time=01:00:00

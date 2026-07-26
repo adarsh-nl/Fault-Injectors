@@ -34,10 +34,15 @@ output_animation.mp4
 src/fault_injectors/npy/
 
 # SLURM job logs and run outputs
+# SLURM job logs. Matched on the JOB-ID SUFFIX rather than the per-job name
+# prefix, because every sbatch here writes <name>-%j.{out,err} and a
+# prefix-based rule needs a new line for every new script -- a076f70 added
+# dryrun-*, and lossfix-* was then committed for want of one. This catches
+# any <anything>-<digits>.out/.err, so a new job script never needs an edit.
+*-[0-9]*.out
+*-[0-9]*.err
 slurm-*.out
 slurm-*.err
-dryrun-*.out
-dryrun-*.err
 results/
 cora-results/
 cora-dryrun/

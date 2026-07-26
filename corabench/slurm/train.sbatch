@@ -10,6 +10,7 @@
 #SBATCH --job-name=cora-train
 #SBATCH --partition=ps,main-gpu
 #SBATCH --gres=gpu:1
+#SBATCH --constraint=l40      # see CLAUDE.md: main-gpu spans Turing/Ampere/Lovelace
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=32G
 #SBATCH --time=48:00:00
