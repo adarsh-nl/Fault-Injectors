@@ -111,6 +111,30 @@ class PACModule(nn.Module):
             self.deform_weight_reg[:, :, kernel_size // 2, kernel_size // 2] = eye
         self.fuse_cls = nn.Conv2d(2 * ncls_ch, ncls_ch, 1)   # A3
         self.fuse_reg = nn.Conv2d(2 * nreg_ch, nreg_ch, 1)
+        # Focal prior, the same constant as cpbench/models/heads.py:70. PAC's
+        # classification output is produced HERE rather than by DetectionHead,
+        # so it never received that init: fuse_cls shipped with default Conv2d
+        # init (bias ~ 0, weights small), the branch started confident on
+        # background, and cls_pac contributed ~47.6 of the ~50.1 step-0
+        # classification loss against ~1.13 each for local and lc (job 547612).
+        #
+        # Bias, not identity-averaging init: cls_p and cls_pp reach this layer
+        # already stripped of the prior, because Eq. 13 and the selection gate
+        # each MULTIPLY the logits by a sigmoid in [0, 1], pulling -4.59 to
+        # about -2.1 and then -1.0 (taps pac/scored_cls, pac/corrected_cls).
+        # Averaging them would propagate ~-1.6, not -4.59. See the RECON note
+        # "gate composition in logit space" in docs/corabench_design.md: this
+        # bias patches the symptom at init and does NOT fix that inversion.
+        #
+        # -4.59 = -log(99) is a prior on the LOGIT, but the focal loss consumes
+        # the recalibrated PRODUCT sigmoid(cls) * sigmoid(-U) (assumption A4),
+        # so with U at its default init (observed mean +0.255 -> sigmoid(-U) =
+        # 0.437) the product lands at 0.0044 rather than 0.01, about 2x
+        # over-suppressed. -3.75 would land it exactly and is deliberately NOT
+        # used: it is calibrated against U's arbitrary init, which drifts to
+        # mean +11.4 within 45 steps. Cost of over-suppressing is the positive
+        # focal term going 1.13 -> 1.35.
+        nn.init.constant_(self.fuse_cls.bias, -4.59)
 
     # -- helpers ------------------------------------------------------------
 

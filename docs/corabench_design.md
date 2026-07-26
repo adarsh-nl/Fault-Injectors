@@ -112,6 +112,82 @@ assumption**, logged with every experiment:
 | A7 | PE form | sinusoidal embedding of the 8-vector (x,y,z,l,h,w,α,δ) per cell, OpenCOOD anchor decode |
 | A8 | Nreg | 7 box params × 2 anchors (OpenCOOD PointPillar convention) |
 | A9 | CSSM scan order | VMamba-style 2-D cross-scan (4 directions), merged |
+| A10 | How PAC's selection and attention gates compose with classification **logits** | multiplicative in logit space, `cls * gate` — **RECON, known pathology, see §1.5** |
+
+---
+
+### 1.5 RECON notes (reconstructed choices with known defects)
+
+A **RECON** note records a place where the paper does not specify the
+behaviour, we chose one, and the choice is known to be wrong in a way we have
+measured but deliberately not repaired. It is not a TODO: it is a statement
+that results produced under it carry this caveat.
+
+#### RECON-1: gate composition in logit space (A10)
+
+**What the paper leaves open.** Eq. 13 writes the semantically-scored
+collaborator map as `C' = C_s ⊙ attn`, and the selection stage similarly
+gates by a learned confidence. The paper does not say whether `C` at that
+point is a feature map, a logit map, or a probability map, and the three
+compose differently.
+
+**What we chose.** `PACModule` consumes the collaborators' *classification
+head outputs*, which are **logits**, and gates them by multiplication
+(`pac.py`):
+
+```python
+sel   = self.select(...)          # nn.Sequential(..., nn.Sigmoid()) -> [0, 1]
+cls_s = cls_j * sel               # selection gate
+attn  = torch.sigmoid(self.f_attn(...))
+cls_p = cls_s * attn              # Eq. 13
+```
+
+**Why that is wrong.** In logit space **zero is not "nothing" — it is
+p = 0.5.** Multiplying a logit by a gate in `[0, 1]` pulls it toward zero,
+so a *closing* gate makes the model *less* certain the cell is background.
+The gate's numerical effect is the inverse of its semantic role, and the
+gradient through `sel` therefore has the wrong sign relative to what the gate
+is supposed to mean. Gating should be **additive in logit space**
+(`z + log a`) or **multiplicative in probability space** (`a · p`).
+
+**Measured effect (job 547612, step 0).** The `-4.59` focal prior carried by
+the collaborators' `DetectionHead` logits is attenuated by roughly the
+product of the two gates before it reaches `fuse_cls`:
+
+| tensor | tap | mean |
+|---|---|---|
+| `cls_j` (incoming) | — | ≈ −4.59 |
+| `cls_s = cls_j * sel` | (cls-only estimate) | ≈ **−2.08** (ratio 0.45 ≈ sigmoid at init) |
+| `cls_p = cls_s * attn` | `pac/scored_cls` | **−1.0116** |
+| `cls_pp` | `pac/corrected_cls` | **−2.1969** |
+| `cls_out` | `pac/output_cls` | **−0.9367** |
+
+Note `pac/selected_collab` (mean −0.2645) is **not** a `cls_s` statistic: it
+is `cat([cls_s, reg_s])` with shape `2x16x100x352`, so 14 of its 16 channels
+are regression and sit near zero at init. `(2·(−2.08) + 14·0)/16 = −0.26`
+reproduces it. Its `sparsity` is `0.0000`, so there is no zero-filled
+unserved-cell path in it — the attenuation is gating, not coverage.
+
+**What the `fuse_cls` bias does and does not do.** The `-4.59` prior added to
+`fuse_cls` compensates at initialisation, because it shifts the whole output
+down including the attenuated cells. It does **not** repair the inversion
+during training: any cell whose gate closes drifts back toward
+`p = sigmoid(bias)` rather than toward background, and the gradient through
+the gate keeps its wrong sign.
+
+**Alternatives, and what each would cost.**
+
+| option | change | cost | risk |
+|---|---|---|---|
+| **1. Additive in logit space** | `self.select` / `self.f_attn` emit raw logits; use `F.logsigmoid(gate_logit)` and `cls_s = cls_j + logsig`. Stable by construction — never forms `log(0)`. | ~15 lines in `pac.py`; the `pac/attention_map` tap changes meaning (log-space, ≤ 0) so its registry entry and any test asserting `∈ [0,1]` must change. **~1 hour.** | The prior would then propagate through the gates *intact*, which makes the new `fuse_cls` bias a **double-count** — it must be removed in the same change. Results not comparable to any earlier run. |
+| **2. Multiplicative in probability space** | `p_s = sel · sigmoid(cls_j)`, carry probabilities through PAC. | The whole downstream chain changes meaning: `deform_conv2d` would resample probabilities, and `fuse_cls` would fuse probabilities, so `BoxDecoder(scores_are_logits=False)` and the LC/PAC focal path all need re-checking. Reintroduces a `log(0)` hazard on conversion back. **~half a day.** | Highest numerical risk; touches the same clamp that caused job 547612. |
+| **3. Gate in feature space** | Move gating upstream of the detection head, where multiplication *is* meaningful. | PAC's input contract changes from head outputs to features; Eq. 13 no longer maps onto the implementation. **Days.** | Arguably no longer the paper's PAC. |
+| **4. Leave it, measure it** | Add a `pac/gate_closed_fraction` tap and bound the pathology's magnitude. | ~30 min, no semantic change. | Does not fix anything; makes the defect visible per run. |
+
+**Recommendation if this is revisited:** option 1, paired with removing the
+`fuse_cls` bias in the same commit, because the two are alternatives rather
+than complements — with additive gating the incoming `-4.59` survives and a
+second `-4.59` would suppress background to `p ≈ 1e-4`.
 
 ---
 
