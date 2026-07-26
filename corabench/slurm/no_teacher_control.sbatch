@@ -34,6 +34,7 @@
 #SBATCH --partition=ps,main-gpu
 #SBATCH --gres=gpu:1
 #SBATCH --constraint=l40      # see CLAUDE.md: main-gpu spans Turing/Ampere/Lovelace
+#SBATCH --exclude=hpc-node10
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
