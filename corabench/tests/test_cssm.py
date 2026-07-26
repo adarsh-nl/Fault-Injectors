@@ -22,8 +22,21 @@ def test_chunked_scan_matches_naive_recurrence():
     delta = torch.rand(2, 41, 5) * 0.3
     A = -torch.rand(5, 3) * 2
     B, C = torch.randn(2, 41, 3), torch.randn(2, 41, 3)
-    out = _chunked_selective_scan(x, delta, A, B, C, chunk=7)
+    out, stats = _chunked_selective_scan(x, delta, A, B, C, chunk=7)
     assert torch.allclose(out, _naive(x, delta, A, B, C), atol=1e-5)
+    # This regime is deliberately benign -- delta <= 0.3, |A| <= 2, so
+    # |dA| <= 0.6 and logE never approaches the -30 floor over 7-position
+    # chunks. The chunked closed form agrees with the naive scan exactly
+    # HERE, and only here: agreement is what breaks once the clamp engages,
+    # because a pinned E_t/E_s reads as 1 (RECON-4). Asserting the saturated
+    # band is empty pins that this test covers the unclamped path and nothing
+    # more -- it must not silently drift into validating the degenerate one.
+    assert float(stats["saturated"]) == 0.0, (
+        "the reference-agreement test has drifted into the clamped regime; "
+        "it no longer validates what it claims to")
+    assert abs(float(stats["saturated"]) + float(stats["healthy"])
+               + float(stats["integrator"]) - 1.0) < 1e-6, \
+        "the three logE bands must partition the entries exactly once"
 
 
 def test_cssm_shapes_and_grad():

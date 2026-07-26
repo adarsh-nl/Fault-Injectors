@@ -226,6 +226,149 @@ observation of this term actually doing work. `u_reg` is deliberately **not**
 changed: raising it is a change to the objective, and the objective should not
 move in the same run as a numerical fix.
 
+#### RECON-4: the entire CSSM numerical construction (A9)
+
+**What the paper says.** Everything about CSSM reduces to one line:
+
+```
+X_ssm = CSSM(Z_fused, Linear(Z_fused), Z_i)
+```
+
+plus the statement that it is "based on Mamba". The paper specifies **no** A
+parameterisation, **no** stability condition, **no** discretisation, **no**
+step-size (Δ) initialisation or range, **no** clamping or numerical-stability
+treatment, **no** scan order, and **no** pooling. Every numerical property of
+`fusion/cssm.py` is therefore reconstructed:
+
+| element | our choice | paper |
+|---|---|---|
+| state matrix | `A = -exp(a_log)`, `a_log` init `log([1..N])` | unspecified |
+| step size | `Δ = softplus(Linear(Z_fused))`, `bias = -2.0` constant, weight default `nn.Linear` init | unspecified |
+| discretisation | chunked closed form, `h_t = E_t(h_0 + Σ b_s/E_s)`, chunk 64 | unspecified |
+| clamping | `logE.clamp(min=-30, max=0)`, `E.clamp(min=1e-30)` | unspecified |
+| scan order | `cross2d`, 4 directions, merged | unspecified |
+| pooling | `avg_pool2d(2)` before the scan | unspecified |
+
+`A = -exp(a_log)` **is** the Mamba structural guarantee and is correct: A is
+negative for every real `a_log`, so no gradient step can flip its sign, and
+`Δ = softplus(·) > 0` makes `dA < 0` strictly. That part is sound.
+
+**Two opposite pathological tails, coexisting in one tensor.** `logE` is per
+`(D, N)` and both `Δ` and `|A|` vary across it, so different state channels
+sit in different regimes simultaneously. Critically, **the cumsum is over the
+chunk slice** (`dc = delta[:, s:s+chunk]`), so `logE` resets every 64
+positions — no claim about whole-sequence accumulation can rest on it.
+
+*Saturated tail (`logE ≤ -30`).* The clamp is not a safety guard: the closed
+form is exact only while `E_t/E_s` is the true decay ratio, and once both are
+pinned that ratio evaluates to exactly **1**, so the chunk stops forgetting
+instead of forgetting completely. But `h = hc[:, -1] = E_last·(h_prev + acc)`
+with `E_last = exp(-30) = 9.4e-14` **annihilates the carried state at the
+boundary**. So this degeneracy is bounded by `chunk = 64`, *not* by L: at
+`dA = -18.4` correct behaviour is `h_t ≈ b_t` (one term) and degenerate is up
+to 64 — **64× coherent, ~8× random-sign**. That does not reach the observed
+1069×.
+
+*Integrator tail (`logE ≈ 0`).* Where `Δ·|A| → 0` nothing decays, `E ≈ 1`,
+and the boundary does **not** annihilate `h`: `h_new = h_prev + acc`. The
+state then integrates across all 138 chunks — an **L-fold (8800) accumulator**.
+This is correct SSM math for a near-zero decay parameter, and it is precisely
+what Mamba's `dt_init` prevents by bounding `Δ ≥ dt_min = 0.001`. **This is
+the regime that turns a 1e-3 parameter step into a ~10³ activation change**,
+and it makes the Δ initialisation below the *primary* defect, with the clamp
+secondary.
+
+**Consequence: sensitivity, not magnitude.** Job 549227 had `Δ` amax 1.15 at
+step 0, so `dA` reached −18.4 and the floor was hit within two positions —
+the saturated regime was **already fully active at step 0**, where
+`lc/ssm_out` was a healthy 4.965. The accumulator therefore does not explain
+the activation magnitude; it explains the *derivative*. With `h = Σ b_s` over
+L positions in the integrator band, `dh/dθ` carries the same L-fold
+amplification, and one `lr·sign(g)` step of 1e-3 produced a 1069× change in
+`lc/ssm_out` while every input to the scan moved ≤1.3×.
+
+**A first measurement, on synthetic:** `lc/ssm_logE_saturated` reads **0.46**
+at step 0. That is not a middling amount of one pathology — it is the split
+between the two tails, roughly half the scan pinned at the floor and the rest
+concentrated near `logE ≈ 0`. The three-band tap
+(`saturated` / `healthy` / `integrator`) plus the decay-horizon percentiles
+exist to separate them per step rather than infer the split.
+
+**Second, independent defect: Δ is not initialised.** Mamba's reference
+`dt_init` samples `dt ~ exp(U(log dt_min, log dt_max))` with
+`[dt_min, dt_max] = [0.001, 0.1]`, sets `dt_proj.bias` to the inverse softplus
+of that, and rescales `dt_proj.weight` by `dt_rank^-0.5 · dt_scale`. We do
+neither — a constant `bias = -2.0` (`softplus = 0.127`, already above Mamba's
+`dt_max`) and an unscaled weight, so the projection dominates the bias:
+
+| | Mamba reference | ours (549227) |
+|---|---|---|
+| Δ | [0.001, 0.1] | 1.15 at init, 4.925 after one step |
+| \|dA\| | [0.001, 1.6] | up to 18.4, then 78.8 |
+| positions to reach logE = −30 | 19 (worst) – 30 000 | **2**, then <1 |
+
+These two defects compose: a correct `Δ` range would make clamp saturation
+occasional, and a formulation that never divides by `E` would make saturation
+harmless. Together they make it universal *and* harmful. This is the same
+class as PAC's missing focal prior (A3) — a structural initialisation the
+reference implementation performs and we skipped.
+
+**Measurement before repair.** `lc/ssm_logE_clamped` records the fraction of
+cumulative log-decay entries pinned at the floor, so the degeneracy is
+observed rather than argued. Nothing about the clamp, `Δ` init, or the scan
+form is changed until that measurement and the `teacher_enabled=false`
+control are both in.
+
+#### RECON-3: `L_align` reduction — the paper sums, we average (A6)
+
+**What the paper says.** Eq. 11, verbatim:
+
+```
+L_align = ||F_out - F_teacher||²₂
+```
+
+A squared L2 norm — a **sum** over all elements. The paper attaches **no
+weighting coefficient** to it: it appears standalone in the objective, and no
+numeric value for any such coefficient is given anywhere, including the
+experimental-setup and implementation sections. Table 3 ablates `+L_align`
+on/off without a weight.
+
+**What we implement.** `fusion/teacher.py`:
+
+```python
+def align_loss(f_out, f_teacher):
+    return nn.functional.mse_loss(f_out, f_teacher.detach())
+```
+
+`nn.functional.mse_loss` defaults to `reduction='mean'`, so this is the
+**mean** over `B·C·H·W`, not the sum. For the OPV2V grid that is
+`2 · 256 · 100 · 352 ≈ 1.8e7` elements.
+
+**Why it matters.** Two reconstructed choices interact multiplicatively:
+
+| | paper | ours | factor |
+|---|---|---|---|
+| reduction | sum (`\|\|·\|\|²₂`) | mean | **1 / 1.8e7** |
+| coefficient | none stated | `λ_align = 1.0` | — |
+
+**The mean is the only reason `λ_align = 1.0` is survivable.** A literal
+implementation of Eq. 11 at unit weight would place `L_align` roughly seven
+orders of magnitude above every other term, and the objective would be the
+distillation loss alone. Conversely, anyone reading Eq. 11 and our
+`λ_align: 1.0` together will conclude we weight alignment as the paper does.
+We do not: our effective weight relative to Eq. 11 is `1/(B·C·H·W)`, and it
+**varies with batch size and grid resolution**, so it is not even a fixed
+reconstruction — changing `dataset.grid` silently rescales this loss term
+against the others.
+
+**Status: RECON, both halves.** Neither the reduction nor the coefficient is
+specified by the paper. Not changed here; a change to either is a change to
+the objective and must not ride along with a numerical fix. If it is
+revisited, the honest options are (a) keep `mean` and state plainly that
+`λ_align` is not the paper's coefficient, or (b) move to `sum` and retune
+`λ_align` to something near `1/(B·C·H·W)`, which makes the resolution
+dependence explicit rather than hidden.
+
 ---
 
 ## 2. Repository placement & dependency policy

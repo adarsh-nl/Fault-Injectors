@@ -56,22 +56,64 @@ def _chunked_selective_scan(x: torch.Tensor, delta: torch.Tensor,
                             C: torch.Tensor, chunk: int = 64) -> torch.Tensor:
     """Exact selective scan, chunked closed form.
 
-    Shapes: x, delta (Bt, L, D); A (D, N); B, C (Bt, L, N). Returns (Bt, L, D).
+    Shapes: x, delta (Bt, L, D); A (D, N); B, C (Bt, L, N).
+    Returns ``(y, clamped_fraction)``: y is (Bt, L, D); clamped_fraction is a
+    0-d tensor giving the share of cumulative log-decay entries pinned at the
+    -30 floor, for the ``lc/ssm_logE_clamped`` tap.
 
     Within a chunk:  h_t = E_t * (h_0 + sum_{s<=t} b_s / E_s)  with
     E_t = exp(cumsum(delta*A)) decaying, exponents clamped to keep 1/E finite.
+
+    NOTE the clamp is a correctness defect, not a guard -- see RECON-4 in
+    docs/corabench_design.md. It exists only because this form divides by E;
+    once logE_t and logE_s are both pinned, E_t/E_s reads as exactly 1 and the
+    recurrence degenerates from near-total forgetting into NO forgetting, an
+    undamped sum over the whole sequence. Deliberately unchanged for now:
+    the tap measures how much of the scan is affected before anything moves.
     """
     bt, L, d = x.shape
     n = A.shape[1]
     h = x.new_zeros((bt, d, n))
     ys = []
+    # Three-band census of the cumulative log-decay. The two pathological
+    # regimes are OPPOSITE tails that coexist in one tensor, because logE is
+    # per (D, N) and both delta and |A| vary across it:
+    #   saturated  (logE <= -30)     pinned at the floor. E_t/E_s reads as 1
+    #                                so the chunk stops forgetting -- but
+    #                                h = E_last*(h_prev+acc) ANNIHILATES the
+    #                                carried state, so this accumulation is
+    #                                bounded by `chunk`, not by L.
+    #   healthy    (-30 < logE < -0.01)  real decay.
+    #   integrator (logE >= -0.01)   E ~ 1, nothing decays and nothing is
+    #                                annihilated at the boundary, so the state
+    #                                integrates across EVERY chunk -- an
+    #                                L-fold accumulator. This is correct SSM
+    #                                math for delta -> 0, and it is precisely
+    #                                what Mamba's dt_init (dt_min = 0.001)
+    #                                exists to prevent.
+    n_sat = n_int = n_total = 0
+    horizons = []            # per-chunk median of 1/|dA|, in positions
     for s in range(0, L, chunk):
         xc = x[:, s:s + chunk]                                   # (Bt, Lc, D)
         dc = delta[:, s:s + chunk]
         Bc = B[:, s:s + chunk]                                   # (Bt, Lc, N)
         Cc = C[:, s:s + chunk]
         dA = dc.unsqueeze(-1) * A                                # (Bt, Lc, D, N)
-        logE = dA.cumsum(dim=1).clamp(min=-30.0, max=0.0)
+        # NOTE the cumsum is over the CHUNK SLICE: logE resets every `chunk`
+        # positions. Any claim about accumulation "over the whole sequence"
+        # must come from the integrator band, where the chunk boundary does
+        # not annihilate h, and never from the saturated band, where it does.
+        raw_logE = dA.cumsum(dim=1)
+        with torch.no_grad():
+            n_sat += int((raw_logE <= -30.0).sum())
+            n_int += int((raw_logE >= -0.01).sum())
+            n_total += raw_logE.numel()
+            # Effective decay horizon: positions until a contribution decays
+            # by 1/e. delta is what moves during training; |A| is fixed at
+            # init, so this tracks the step size rather than the state matrix.
+            horizons.append(
+                torch.median(1.0 / dA.abs().clamp(min=1e-12)).item())
+        logE = raw_logE.clamp(min=-30.0, max=0.0)
         E = torch.exp(logE)
         b = (dc * xc).unsqueeze(-1) * Bc.unsqueeze(2)            # (Bt, Lc, D, N)
         # closed form: h_t = E_t * (h_0 + sum_{s<=t} b_s / E_s), E_t = prod a_r
@@ -79,7 +121,22 @@ def _chunked_selective_scan(x: torch.Tensor, delta: torch.Tensor,
         hc = E * (h.unsqueeze(1) + acc)                          # (Bt, Lc, D, N)
         ys.append(torch.einsum("bldn,bln->bld", hc, Cc))
         h = hc[:, -1]
-    return torch.cat(ys, dim=1)
+    total = max(n_total, 1)
+    horizons_t = torch.tensor(sorted(horizons)) if horizons else torch.zeros(1)
+    stats = {
+        "saturated": x.new_tensor(n_sat / total),
+        "integrator": x.new_tensor(n_int / total),
+        "healthy": x.new_tensor((total - n_sat - n_int) / total),
+        # Median of the per-chunk medians. The median is deliberately paired
+        # with p95: the integrator regime is a TAIL, and a median that sits at
+        # ~1 position would hide a tail running past L entirely.
+        "horizon_p50": x.new_tensor(
+            float(horizons_t[len(horizons_t) // 2])),
+        "horizon_p95": x.new_tensor(
+            float(horizons_t[min(len(horizons_t) - 1,
+                                 int(0.95 * len(horizons_t)))])),
+    }
+    return torch.cat(ys, dim=1), stats
 
 
 class CSSM(nn.Module):
@@ -186,9 +243,18 @@ class CSSM(nn.Module):
                 delta = F.softplus(self.dt_proj(xs32))
                 if direction == 0:
                     emit(taps, delta, module="CSSM", location="lc/ssm_delta")
-                y = _chunked_selective_scan(
+                y, scan_stats = _chunked_selective_scan(
                     xs32, delta, A.float(), self.b_proj(xs32),
                     self.c_proj(es32), self.chunk)
+                if direction == 0:
+                    for key, loc in (
+                            ("saturated", "lc/ssm_logE_saturated"),
+                            ("healthy", "lc/ssm_logE_healthy"),
+                            ("integrator", "lc/ssm_logE_integrator"),
+                            ("horizon_p50", "lc/ssm_decay_horizon_p50"),
+                            ("horizon_p95", "lc/ssm_decay_horizon_p95")):
+                        emit(taps, scan_stats[key].reshape(1), module="CSSM",
+                             location=loc)
                 y = y + self.d_skip.float() * xs32
             y2d = self._unflatten(y.to(xs.dtype), direction, (hp, wp))
             out = y2d if out is None else out + y2d

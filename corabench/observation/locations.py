@@ -99,6 +99,31 @@ _ALL: List[Location] = [
          "step-size parameter Delta = softplus(Linear(Z_fused)) (Eq. 8)"),
     _loc("lc/ssm_out", "CSSM", "(B, C, H, W)",
          "selective-scan output X_ssm (Eq. 8)"),
+    # Three-band census of the cumulative log-decay (RECON-4). logE is per
+    # (D, N) and the cumsum resets each chunk, so the two pathological
+    # regimes are opposite tails that coexist in one tensor.
+    _loc("lc/ssm_logE_saturated", "CSSM", "(1,) fraction in [0, 1]",
+         "share of logE entries at or below the -30 clamp. E_t/E_s reads as 1 "
+         "so the chunk stops forgetting -- but h = E_last*(h_prev+acc) "
+         "annihilates the carried state, so this accumulation is bounded by "
+         "`chunk` (64), NOT by L"),
+    _loc("lc/ssm_logE_healthy", "CSSM", "(1,) fraction in [0, 1]",
+         "share of logE entries in (-30, -0.01): genuine decay"),
+    _loc("lc/ssm_logE_integrator", "CSSM", "(1,) fraction in [0, 1]",
+         "share of logE entries at or above -0.01, i.e. E ~ 1. Nothing decays "
+         "and the chunk boundary does not annihilate h, so the state "
+         "integrates across every chunk -- an L-fold (8800) accumulator that "
+         "turns a 1e-3 parameter step into ~1e3 activation change. Correct "
+         "SSM math for delta -> 0, and exactly what Mamba's dt_init "
+         "(dt_min = 0.001) prevents. THIS is the primary quantity"),
+    _loc("lc/ssm_decay_horizon_p50", "CSSM", "(1,) positions",
+         "median of 1/|dA| = positions until a contribution decays by 1/e. "
+         "delta moves during training; |A| is fixed at init, so this tracks "
+         "the step size. Mamba's dt range gives 0.6-1000 positions"),
+    _loc("lc/ssm_decay_horizon_p95", "CSSM", "(1,) positions",
+         "95th percentile of the same. Paired with p50 because the integrator "
+         "regime is a TAIL: a median near 1 position would hide a tail "
+         "running past L entirely"),
     _loc("lc/gate", "GatingUnit", "(B, 1, H, W)",
          "spatial gate g = sigma(DWConv(Conv(X_ssm))) (Eq. 9)"),
     _loc("lc/output", "LCModule", "(B, C, H, W)",
