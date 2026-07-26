@@ -15,7 +15,12 @@
 set -euo pipefail
 
 REPO="$HOME/Fault-Injectors"
-DATA_ROOT="${DATA_ROOT:-/datasets/eemcs/ps/cv/opencood/opv2v}"
+
+# One resolution point for data: CPBENCH_DATA_ROOT. Set it in your shell (or
+# here) for the machine; everything below and every config derives from it.
+# On the UT EEMCS cluster the shared CV tree is /datasets/eemcs/ps/cv.
+export CPBENCH_DATA_ROOT="${CPBENCH_DATA_ROOT:-/datasets/eemcs/ps/cv}"
+DATA_ROOT="$CPBENCH_DATA_ROOT/opencood/opv2v"
 
 module purge
 unset PYTHONHOME PYTHONSTARTUP
@@ -27,14 +32,22 @@ export OMP_NUM_THREADS=1
 export MKL_NUM_THREADS=1
 export PYTHONUNBUFFERED=1
 
-# A 3-agent scenario is closer to the 2.8 train mean than the first
-# alphabetically, which is 2-agent and would understate per-step cost.
-SCEN=$(ls "$DATA_ROOT/train" | head -1)
-echo "scenario: $SCEN"
-nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
+# dataset.scenarios is ONE key applied to every split, and build_adapters
+# filters by name membership. So pass one name from each split: train/ keeps
+# the train scenario, validate/ keeps the validate one. Passing only a train
+# name leaves the validation adapter empty and the job dies at train.py:58.
+#
+# Names must be QUOTED inside the brackets: YAML 1.1 reads underscores as
+# digit separators, so [2021_08_16_22_26_54] becomes the integer
+# 20210816222654 and matches no directory.
+SCEN_TRAIN=$(ls "$DATA_ROOT/train"    | head -1)
+SCEN_VAL=$(ls   "$DATA_ROOT/validate" | head -1)
+echo "train scenario:    $SCEN_TRAIN  ($(ls "$DATA_ROOT/train/$SCEN_TRAIN" | wc -l) agents)"
+echo "validate scenario: $SCEN_VAL"
+nvidia-smi --query-gpu=name,memory.total --format=csv,noheader | head -1
 
 srun .venv-hpc/bin/python -m corabench.scripts.train \
-    dataset=opv2v dataset.root="$DATA_ROOT" \
-    dataset.scenarios="[\"$SCEN\"]" \
+    dataset=opv2v \
+    dataset.scenarios="[\"$SCEN_TRAIN\",\"$SCEN_VAL\"]" \
     trainer.epochs=1 trainer.num_workers=7 \
     results_dir="$HOME/cora-dryrun"
