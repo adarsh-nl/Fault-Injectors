@@ -87,6 +87,8 @@ class Trainer:
         self._nonfinite_steps = 0
         self.taps = taps
         self._scale_floor = float(cfg.get("scale_floor", 1e-8))
+        self._logit_warn_threshold = float(cfg.get("logit_warn_threshold", 20.0))
+        self._saturating_steps = 0
         self._initial_scale = float(self.scaler.get_scale()) if self.amp else 1.0
 
     # -- checkpointing ------------------------------------------------------
@@ -109,6 +111,60 @@ class Trainer:
                 m = float(v.abs().max())
                 if not (m <= worst):        # False for NaN, so NaN propagates
                     worst = m
+        return worst
+
+    def _grad_norm_by_module(self) -> str:
+        """Per-top-level-submodule gradient norms as "name=norm;name=norm".
+
+        The global norm says how big the gradient is, never which part of the
+        model owns it. In job 547612 the only three steps that ever landed had
+        pre-clip norms of 1006 / 317 / 204, and lc/output grew 142x across
+        them while encoder/bev_features stayed flat -- but with one global
+        scalar there is no way to tell whether the LC branch originated that
+        or merely transmitted it.
+
+        Format is ';'-separated and comma-free so it survives a CSV cell.
+        """
+        totals: Dict[str, float] = {}
+        for name, param in self.model.named_parameters():
+            if param.grad is None:
+                continue
+            top = name.split(".")[0]
+            totals[top] = totals.get(top, 0.0) + float(
+                param.grad.detach().pow(2).sum())
+        return ";".join(f"{k}={v ** 0.5:.6g}"
+                        for k, v in sorted(totals.items(),
+                                           key=lambda kv: -kv[1]))
+
+    def _warn_if_head_saturating(self, out: Dict[str, Any], epoch: int,
+                                 i: int) -> float:
+        """max|cls logits| across branches; warns past the saturation knee.
+
+        A focal loss made finite by a float32 island no longer produces a NaN
+        when the head saturates, so the trainer's non-finite guard goes quiet
+        and the run COMPLETES while being just as broken. In half precision
+        sigmoid saturates to exactly 1.0 above a logit of about 8.3; job
+        547612 reached 205.5. Warning at 20 puts the alarm well past normal
+        variation and well below the point where the loss stops carrying
+        information, so a saturating run announces itself in the log instead
+        of waiting to be found in taps.csv.
+        """
+        worst = 0.0
+        for branch in ("local", "lc", "pac"):
+            block = out.get(branch)
+            if isinstance(block, dict) and torch.is_tensor(block.get("cls")):
+                worst = max(worst, float(block["cls"].detach().abs().max()))
+        if worst > self._logit_warn_threshold:
+            self._saturating_steps += 1
+            logger.warning(
+                "epoch %d batch %d: max|cls logit| = %.4g exceeds %.4g. In "
+                "fp16 sigmoid saturates to exactly 1.0 above ~8.3, so the "
+                "classification loss is losing its gradient signal. The loss "
+                "is FINITE (float32 island) and will not trip the non-finite "
+                "guard -- completion is not evidence of health. %d saturating "
+                "steps so far; check taps.csv lc/output and head/cls_logits.",
+                epoch, i, worst, self._logit_warn_threshold,
+                self._saturating_steps)
         return worst
 
     def _assert_finite_state(self, epoch: int, tag: str) -> bool:
@@ -166,6 +222,11 @@ class Trainer:
                 losses = self.loss_fn(out, batch)
             self.scaler.scale(losses["total"]).backward()
             self.scaler.unscale_(self.optimizer)
+            # Measured after unscale_ and BEFORE the clip, so it is the real
+            # gradient rather than a uniformly rescaled one. Only on logging
+            # steps: each entry costs a reduction and a device sync.
+            logging_step = (i % self.log_every == 0)
+            by_module = self._grad_norm_by_module() if logging_step else ""
             grad_norm = torch.nn.utils.clip_grad_norm_(
                 self.model.parameters(), self.grad_clip)
 
@@ -223,7 +284,7 @@ class Trainer:
                     f"location that goes non-finite.")
 
             self.explog.log_fault_records(batch["fault_records"])
-            if i % self.log_every == 0:
+            if logging_step:
                 mem = torch.cuda.max_memory_allocated() / 2 ** 20 \
                     if self.device.type == "cuda" else 0.0
                 rec = TrainRecord(
@@ -238,17 +299,20 @@ class Trainer:
                     scaler_scale=float(self.scaler.get_scale()),
                     n_skipped_steps=float(self._nonfinite_steps),
                     opt_state_amax=self._optimizer_state_amax(),
+                    grad_norm_by_module=by_module,
+                    head_logit_amax=self._warn_if_head_saturating(out, epoch, i),
                     batch_time_s=time.perf_counter() - t0,
                     gpu_mem_mb=mem)
                 self.explog.log_train(rec)
                 logger.info(
                     "epoch %d batch %d loss %.4g (cls %.4g reg %.4g "
                     "align %.4g pac %.4g) | grad_norm %.4g scale %.4g "
-                    "skipped %d opt_amax %.4g",
+                    "skipped %d opt_amax %.4g logit_amax %.4g | %s",
                     epoch, i, rec.loss_total, rec.loss_cls, rec.loss_reg,
                     rec.loss_align, rec.loss_pac, rec.grad_norm,
                     rec.scaler_scale, int(rec.n_skipped_steps),
-                    rec.opt_state_amax)
+                    rec.opt_state_amax, rec.head_logit_amax,
+                    rec.grad_norm_by_module)
         return running / max(len(self.loader), 1)
 
     def fit(self) -> Dict[str, float]:

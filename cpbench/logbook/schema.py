@@ -69,6 +69,15 @@ class TrainRecord:
     scaler_scale: float = 0.0
     n_skipped_steps: float = 0.0
     opt_state_amax: float = 0.0
+    # Localisation. grad_norm is a single global scalar and cannot say WHICH
+    # submodule owns it; grad_norm_by_module is a ';'-separated
+    # "name=norm" string (no commas, so it survives CSV) computed after
+    # unscale_ and BEFORE clipping, i.e. the true gradient. head_logit_amax
+    # is max|cls logits| over every branch: once a focal loss is made finite
+    # by a float32 island, a saturating head no longer announces itself as a
+    # NaN and this is the only thing that still does.
+    grad_norm_by_module: str = ""
+    head_logit_amax: float = 0.0
 
     def as_row(self) -> Dict[str, Any]:
         row = asdict(self)

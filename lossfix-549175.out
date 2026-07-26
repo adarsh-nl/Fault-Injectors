@@ -1,0 +1,5 @@
+resolver: dataset_root('opv2v') -> /datasets/eemcs/ps/cv/opencood/opv2v
+resolver: source                -> $CPBENCH_DATA_ROOT=/datasets/eemcs/ps/cv
+train scenario:    2021_08_16_22_26_54
+validate scenario: 2021_08_20_21_48_35
+Quadro RTX 6000, 23040 MiB
