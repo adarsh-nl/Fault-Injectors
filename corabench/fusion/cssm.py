@@ -178,13 +178,16 @@ class CSSM(nn.Module):
     def __init__(self, channels: int, d_inner: int = 64, d_state: int = 16,
                  scan: str = "cross2d", pool: int = 2,
                  backend: str = "reference", chunk: int = 64,
-                 dt_init: str = "constant") -> None:
+                 dt_init: str = "constant",
+                 dt_max: Optional[float] = None) -> None:
         super().__init__()
         if scan not in ("cross2d", "raster"):
             raise ValueError(f"unknown scan mode: {scan!r}")
         self.scan = scan
         self.pool = max(1, int(pool))
         self.chunk = int(chunk)
+        # None = unbounded, reproducing every run up to job 549427.
+        self.dt_max = None if dt_max is None else float(dt_max)
         self.backend = backend
         if backend == "cuda":  # pragma: no cover - optional dependency
             try:
@@ -295,6 +298,36 @@ class CSSM(nn.Module):
             with torch.autocast(device_type=xs.device.type, enabled=False):
                 xs32, es32 = xs.float(), es.float()
                 delta = F.softplus(self.dt_proj(xs32))
+                if self.dt_max is not None:
+                    # SOFT ceiling, deliberately NOT clamp(max=...). clamp has
+                    # exactly zero gradient above the bound, so an element
+                    # whose pre-activation drifts past it is stuck there with
+                    # no restoring force: dt_proj never learns to come back
+                    # down. That is the same forward-safe / backward-dead
+                    # shape as the asin hard clamp (96fbb2a) and the fp16
+                    # focal clamp (RECON-3) -- the third instance of it.
+                    # tanh saturates smoothly and keeps the gradient alive
+                    # through the APPROACH to the ceiling -- 0.79 at the bound
+                    # itself, 0.15 at the delta observed in 549412 -- which is
+                    # where a restoring force is needed. It is NOT immune:
+                    # sech^2 underflows to zero in float32 past raw delta ~2,
+                    # so far above the bound it is backward-dead too. The
+                    # bound's job is to stop delta ever getting there.
+                    #
+                    # WHY A CEILING AT ALL: dt_init sets where Delta STARTS;
+                    # nothing held it during training. One landed step took it
+                    # 0.318 -> 4.85 -> 11.1 (job 549412), and since
+                    # b = (Delta * x) (x) B scales linearly in Delta, ssm_out
+                    # followed 3.62 -> 192 -> 1612. Clamp saturation stayed at
+                    # ~3% throughout, so the degeneracy was NOT the path.
+                    #
+                    # WHY 0.2 AND NOT 0.1: [0.001, 0.1] is Mamba's dt_init
+                    # RANGE, not a runtime ceiling -- Mamba imposes none,
+                    # because its scan never divides by E. A bound at 0.1
+                    # distorts the top of that range by 24%; 0.2 distorts it
+                    # by <2%. This is a WORKAROUND for our b/E closed form;
+                    # the principled fix remains RECON-4 option 1.
+                    delta = self.dt_max * torch.tanh(delta / self.dt_max)
                 if direction == 0:
                     emit(taps, delta, module="CSSM", location="lc/ssm_delta")
                 y, scan_stats = _chunked_selective_scan(

@@ -26,6 +26,13 @@ cssm:
   # alone -- see RECON-4. Only the BIAS changes; the weight is already at
   # Mamba's dt_init_std.
   dt_init: constant              # constant | mamba        (RECON-4)
+  # Soft ceiling on Delta, applied every forward: dt_max * tanh(Delta/dt_max).
+  # null = unbounded, which reproduces every run up to 549427. dt_init sets
+  # where Delta STARTS; nothing held it during training and one landed step
+  # took it 0.318 -> 4.85 -> 11.1. 0.2 distorts Mamba's [0.001, 0.1] init
+  # range by <2%; 0.1 would distort its top by 24%, and 0.1 was never a
+  # runtime ceiling anyway.
+  dt_max: null                   # null | float            (RECON-4)
   pool: 2                        # scan at H/pool x W/pool; 1 = full res
   backend: reference             # reference | cuda (mamba-ssm)
 

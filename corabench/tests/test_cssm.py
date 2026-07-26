@@ -93,3 +93,47 @@ def test_scan_stats_survive_tensors_above_the_quantile_limit():
     assert y.shape == (bt, length, d)
     assert all(torch.isfinite(v).all() for v in stats.values())
     assert float(stats["horizon_p95"]) >= float(stats["horizon_p50"]) > 0.0
+
+
+def test_dt_max_is_a_soft_bound_with_a_live_gradient_where_it_matters():
+    """The delta ceiling must not repeat the clamp trap -- and its limit.
+
+    ``clamp(max=c)`` has EXACTLY zero gradient above ``c``, so an element whose
+    pre-activation drifts past the bound is stuck with no restoring force:
+    forward-safe, backward-dead. That shape has already cost three defects --
+    the fp16 focal clamp (RECON-3), the asin hard clamp (96fbb2a), and it
+    would have been a third here.
+
+    ``dt_max * tanh(delta / dt_max)`` bounds just as hard and keeps a live
+    gradient through the APPROACH to the ceiling, which is where a restoring
+    force is actually needed. It is NOT immune: ``sech^2`` underflows to zero
+    in float32 past raw delta ~2, so far above the bound it is backward-dead
+    too. The bound's job is to stop delta ever getting there, not to recover
+    from it -- b = (delta * x) (x) B scales linearly in delta, so capping
+    delta caps the runaway that drove it up.
+    """
+    dt_max = 0.2
+    raw = torch.tensor([0.001, 0.011, 0.1, 0.318, 1.0, 4.85],
+                       requires_grad=True)
+    bounded = dt_max * torch.tanh(raw / dt_max)
+    bounded.sum().backward()
+
+    assert float(bounded.max()) <= dt_max * (1 + 1e-6), "must actually bound"
+    # In-range fidelity: dt_init samples [0.001, 0.1] and the bound must
+    # barely touch it, or it is altering the initialisation it protects.
+    for i, target in ((0, 0.001), (1, 0.011)):
+        assert abs(float(bounded[i]) - target) / target < 0.01
+    assert abs(float(bounded[2]) - 0.1) / 0.1 < 0.08      # <8% at dt_init's top
+
+    # THE POINT: a live gradient through the approach, where clamp is already
+    # dead. raw=0.318 is the delta actually observed at step 0 of job 549412.
+    hard = torch.tensor([0.318], requires_grad=True)
+    hard.clamp(max=dt_max).sum().backward()
+    assert float(hard.grad) == 0.0, "clamp is expected to be backward-dead"
+    assert float(raw.grad[3]) > 0.1, (
+        "soft bound went backward-dead at the observed delta; there would be "
+        "no restoring force exactly where one is needed")
+    # Honest limit, pinned so nobody reads the bound as unconditionally safe.
+    assert float(raw.grad[5]) == 0.0, (
+        "sech^2 no longer underflows far above the bound -- the docstring's "
+        "stated limitation is stale and should be updated")

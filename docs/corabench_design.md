@@ -342,6 +342,53 @@ saturates a 64-position chunk in two steps. So `dt_init` is expected to shift
 mass from `saturated` into `healthy` and to populate `integrator` for the
 first time — not to empty the saturated band.
 
+**`dt_init` alone is NOT the fix — the fix is init PLUS a runtime bound.**
+Job 549412 settled this. `dt_init` set Δ correctly at initialisation (amax
+0.318) and **nothing held it there**: `Δ = softplus(dt_proj(x))` with a free
+linear layer and an unbounded activation, so a single landed optimiser step
+took it to 4.85 and the next to 11.1.
+
+**The explosion path is `b`, not saturation.** `b = (Δ·x) ⊗ B` scales
+*linearly* in Δ, and `ssm_out` followed it — while the clamp-saturated
+fraction barely moved:
+
+| step | Δ amax | `lc/ssm_out` | `lc/output` | `head/cls_logits` | **saturated** |
+|---|---|---|---|---|---|
+| 0 | 0.318 | 3.62 | 0.288 | 7.00 | **2.9%** |
+| 1 | 4.85 | 192 | 31.4 | 33.75 | **3.4%** |
+| 2 | 11.1 | 1612 | 297.8 | 271.25 | — |
+
+`ssm_out` moved 445× while saturation moved 2.9% → 3.4%. The clamp degeneracy
+documented above is real but was **static** here and is not the mechanism; the
+earlier 46% figure came from the synthetic grid under `dt_init: constant`.
+Everything downstream — the LC output, the detection-head logits, and the
+`AsinBackward0` that anomaly mode named twice — is driven by Δ. PAC's output
+stayed flat at ~8 throughout.
+
+**The bound (`model.cssm.dt_max`, default `null`).** Applied every forward as
+`dt_max · tanh(Δ / dt_max)`, at `dt_max = 0.2`.
+
+*Why `tanh` and not `clamp(max=·)`.* `clamp` has **exactly zero** gradient
+above the bound, so an element whose pre-activation drifts past it is stuck
+there with no restoring force — forward-safe, backward-dead. That is the same
+shape as the fp16 focal clamp (RECON-3) and the `asin` hard clamp, and this
+would have been its third instance. `tanh` bounds as hard while keeping a live
+gradient through the approach (0.79 at the bound, 0.15 at 549412's observed
+Δ). It is not immune — `sech²` underflows to zero past raw Δ ≈ 2 — but the
+bound exists to stop Δ ever reaching that, not to recover from it.
+
+*Why 0.2 and not 0.1.* **`[0.001, 0.1]` is Mamba's `dt_init` RANGE, not a
+runtime ceiling. Mamba imposes no runtime bound on `dt` at all**, because its
+scan never divides by `E` and is stable for any step size. Bounding at 0.1
+would distort the top of that init range by 24%; 0.2 distorts it by <2%
+(0.011 → 0.011, 0.1 → 0.0924) while still capping `b`.
+
+**Status: `dt_max` is a WORKAROUND for the `b/E` closed form, not an adoption
+of Mamba's practice.** It bounds the input to a formulation that cannot
+tolerate large Δ. The principled fix remains **option 1** in the table above —
+the divide-free SSD form, where a decay span that underflows simply means
+*forget completely* and no ceiling on Δ is needed at all.
+
 **Second, independent defect: Δ is not initialised.** Mamba's reference
 `dt_init` samples `dt ~ exp(U(log dt_min, log dt_max))` with
 `[dt_min, dt_max] = [0.001, 0.1]`, sets `dt_proj.bias` to the inverse softplus
