@@ -102,9 +102,17 @@ def _chunked_selective_scan(x: torch.Tensor, delta: torch.Tensor,
     # Decay horizon is a property of dA alone, so it is computed once over the
     # whole sequence rather than per chunk -- (Bt, L, D, N) under no_grad.
     with torch.no_grad():
-        inv = 1.0 / (delta.unsqueeze(-1) * A).abs().clamp(min=1e-12)
+        inv = (1.0 / (delta.unsqueeze(-1) * A).abs().clamp(min=1e-12)).flatten()
+        # kthvalue, NOT quantile: torch.quantile refuses tensors above 2**24
+        # elements ("input tensor is too large") and this one is
+        # Bt*L*D*N = 2*8800*64*16 = 18.0M on the OPV2V grid. That limit is not
+        # hit on the 576-position synthetic grid (1.18M), so it passed every
+        # local check and then killed jobs 549332/549333 in the first forward
+        # with an empty stderr. median() has no such limit; kthvalue is exact
+        # and costs ~0.4 s on 18M.
         horizon_p50 = inv.median()
-        horizon_p95 = inv.flatten().quantile(0.95)
+        horizon_p95 = torch.kthvalue(
+            inv, max(1, int(0.95 * inv.numel()))).values
         del inv
     for s in range(0, L, chunk):
         xc = x[:, s:s + chunk]                                   # (Bt, Lc, D)

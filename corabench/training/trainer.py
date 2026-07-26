@@ -259,30 +259,6 @@ class Trainer:
                 self.scaler.update()
             running += float(losses["total"].item())
 
-            # Scale-floor abort. A GradScaler that has backed off this far has
-            # not been fixed by backing off, so the non-finite quantity is not
-            # fp16 gradient overflow -- it does not depend on the loss scale,
-            # and no further step can recover. Job 546515 ran to the end of its
-            # epoch with scale exactly 0.0, learning nothing and writing a
-            # 226/227-NaN checkpoint. Stopping here stops at the informative
-            # moment instead of burning the wall clock.
-            scale = self.scaler.get_scale()
-            if scale < self._scale_floor:
-                raise RuntimeError(
-                    f"GradScaler scale collapsed to {scale:.4g} (floor "
-                    f"{self._scale_floor:.4g}) at epoch {epoch} batch {i} "
-                    f"after {self._nonfinite_steps} non-finite steps. The "
-                    f"scale has halved from {self._initial_scale:.4g} without "
-                    f"the gradients becoming finite, so the source is "
-                    f"scale-independent: a non-finite forward activation or "
-                    f"loss, not fp16 gradient overflow. Last losses: "
-                    f"total={float(losses['total'].item()):.4g} "
-                    f"cls={float(losses['cls'].item()):.4g} "
-                    f"reg={float(losses['reg'].item()):.4g} "
-                    f"align={float(losses['align'].item()):.4g}. Inspect "
-                    f"taps.csv (n_nan/n_inf per location) for the first "
-                    f"location that goes non-finite.")
-
             self.explog.log_fault_records(batch["fault_records"])
             if logging_step:
                 mem = torch.cuda.max_memory_allocated() / 2 ** 20 \
@@ -313,6 +289,37 @@ class Trainer:
                     rec.scaler_scale, int(rec.n_skipped_steps),
                     rec.opt_state_amax, rec.head_logit_amax,
                     rec.grad_norm_by_module)
+
+            # Scale-floor abort -- LAST in the step, AFTER log_train.
+            #
+            # A GradScaler that has backed off this far has not been fixed by
+            # backing off, so the non-finite quantity does not depend on the
+            # loss scale and no further step can recover. Job 546515 ran a
+            # whole epoch at scale 0.0, learning nothing and writing a
+            # 226/227-NaN checkpoint.
+            #
+            # ORDER MATTERS: this used to raise BEFORE the TrainRecord was
+            # written, so an early abort produced a results bundle with zero
+            # train rows -- the instrument fired before the measurement it was
+            # meant to preserve. The step that triggers the abort is the most
+            # informative one in the run; it must be in metrics.csv.
+            scale = self.scaler.get_scale()
+            if scale < self._scale_floor:
+                raise RuntimeError(
+                    f"GradScaler scale collapsed to {scale:.4g} (floor "
+                    f"{self._scale_floor:.4g}) at epoch {epoch} batch {i} "
+                    f"after {self._nonfinite_steps} non-finite steps. The "
+                    f"scale has halved from {self._initial_scale:.4g} without "
+                    f"the gradients becoming finite, so the source is "
+                    f"scale-independent: a non-finite forward activation or "
+                    f"loss, not fp16 gradient overflow. Last losses: "
+                    f"total={float(losses['total'].item()):.4g} "
+                    f"cls={float(losses['cls'].item()):.4g} "
+                    f"reg={float(losses['reg'].item()):.4g} "
+                    f"align={float(losses['align'].item()):.4g}. Inspect "
+                    f"metrics.csv (this step IS logged) and taps.csv "
+                    f"(n_nan/n_inf per location) for the first location that "
+                    f"goes non-finite.")
         return running / max(len(self.loader), 1)
 
     def fit(self) -> Dict[str, float]:

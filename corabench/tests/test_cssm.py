@@ -62,3 +62,34 @@ def test_ego_output_matrix_matters():
     y1 = m(zf, torch.rand(1, 8, 6, 6))
     y2 = m(zf, torch.rand(1, 8, 6, 6))
     assert not torch.allclose(y1, y2)
+
+
+def test_scan_stats_survive_tensors_above_the_quantile_limit():
+    """torch.quantile refuses inputs above 2**24 elements.
+
+    The scan's diagnostic statistics are computed over a (Bt, L, D, N) tensor,
+    which is 2*8800*64*16 = 18.0M on the OPV2V grid but only 1.18M on the
+    576-position synthetic one. A `.quantile(0.95)` there therefore passed
+    every local and CI check and then killed jobs 549332 and 549333 in the
+    first forward pass, with an EMPTY stderr and a bundle containing no
+    metrics.csv at all -- the failure looked like the scale-floor abort it
+    was not.
+
+    This shape is the cheapest one that still crosses the limit (16.78M in
+    0.6s), so the guard is affordable enough to keep in the default suite.
+    Scale-dependent limits do not reproduce at test scale unless a test is
+    written at scale.
+    """
+    torch.manual_seed(0)
+    bt, length, d, n = 1, 4097, 64, 64
+    assert bt * length * d * n > 2 ** 24, "shape no longer crosses the limit"
+    x = torch.randn(bt, length, d)
+    delta = torch.rand(bt, length, d) * 0.3
+    A = -torch.rand(d, n) * 2
+    B, C = torch.randn(bt, length, n), torch.randn(bt, length, n)
+
+    y, stats = _chunked_selective_scan(x, delta, A, B, C, chunk=64)
+
+    assert y.shape == (bt, length, d)
+    assert all(torch.isfinite(v).all() for v in stats.values())
+    assert float(stats["horizon_p95"]) >= float(stats["horizon_p50"]) > 0.0
