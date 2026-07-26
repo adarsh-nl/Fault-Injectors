@@ -385,94 +385,64 @@ would distort the top of that init range by 24%; 0.2 distorts it by <2%
 
 **Status: `dt_max` is a WORKAROUND for the `b/E` closed form, not an adoption
 of Mamba's practice.** It bounds the input to a formulation that cannot
-tolerate large Δ. The principled fix remains **option 1** in the table above —
-the divide-free SSD form, where a decay span that underflows simply means
-*forget completely* and no ceiling on Δ is needed at all.
+tolerate large Δ. **That formulation has since been replaced — see below.**
 
-**Second, independent defect: Δ is not initialised.** Mamba's reference
-`dt_init` samples `dt ~ exp(U(log dt_min, log dt_max))` with
-`[dt_min, dt_max] = [0.001, 0.1]`, sets `dt_proj.bias` to the inverse softplus
-of that, and rescales `dt_proj.weight` by `dt_rank^-0.5 · dt_scale`. We do
-neither — a constant `bias = -2.0` (`softplus = 0.127`, already above Mamba's
-`dt_max`) and an unscaled weight, so the projection dominates the bias:
+#### The `b/E` scan was WRONG, not merely fragile (A9) — RESOLVED
 
-| | Mamba reference | ours (549227) |
+Everything above describes symptoms of one defect, and it is worth separating
+what was a workaround from what was a correctness fix.
+
+**The defect.** The chunked closed form computed
+`acc = cumsum(b / E)` then `hc = E · (h + acc)`. Algebraically that is the
+right recurrence, but it forms `1/E`, which forced clamping `logE` at −30 to
+keep the division finite — and **the clamp broke the identity it was
+guarding**: once `logE_t` and `logE_s` are both pinned, `E_t/E_s` evaluates to
+exactly 1, so the chunk stops forgetting instead of forgetting completely.
+
+**It produced the wrong answer.** Against a float64 reference at the regime of
+job 549449 — Δ pinned at 0.2 by `dt_max`, `A = −[1..16]`, `x` at the observed
+`z_fused` scale:
+
+| | amax | rel. error |
 |---|---|---|
-| Δ | [0.001, 0.1] | 1.15 at init, 4.925 after one step |
-| \|dA\| | [0.001, 1.6] | up to 18.4, then 78.8 |
-| positions to reach logE = −30 | 19 (worst) – 30 000 | **2**, then <1 |
+| float64 reference (sequential recurrence) | **139.775** | — |
+| divide-free (SSD) form, fp32 | **139.775** | **3.1e-07** |
+| old `b/E` closed form, fp32 | **381.279** | **2.679** |
 
-These two defects compose: a correct `Δ` range would make clamp saturation
-occasional, and a formulation that never divides by `E` would make saturation
-harmless. Together they make it universal *and* harmful. This is the same
-class as PAC's missing focal prior (A3) — a structural initialisation the
-reference implementation performs and we skipped.
+**268% wrong.** Not a precision wobble — a structurally inflated result, and
+that 2.7× inflation is precisely what drove `ssm_out` past the fp16 ceiling at
+the island exit. Note that finiteness was never the tell: the old form's
+backward at this regime is finite (grad amax ≈ 26), because the `1/E` and `E`
+factors cancel along the graph while the *value* does not.
 
-**Measurement before repair.** `lc/ssm_logE_clamped` records the fraction of
-cumulative log-decay entries pinned at the floor, so the degeneracy is
-observed rather than argued. Nothing about the clamp, `Δ` init, or the scan
-form is changed until that measurement and the `teacher_enabled=false`
-control are both in.
+**The fix.** `h_t = exp(logE_t)·h_0 + Σ_{s≤t} exp(logE_t − logE_s)·b_s`. Since
+`logE` is a cumsum of `Δ·A` with `A < 0` and `Δ > 0`, it is non-increasing, so
+for `s ≤ t` the pairwise exponent is **always ≤ 0** and its exponential is
+bounded by 1. No division, no clamp, nothing to overflow — and a decay span
+that underflows gives 0, which is the correct answer (forget completely)
+rather than the clamped form's 1 (forget nothing).
 
-#### RECON-5: the yaw encode/decode — one sine channel (A8)
+**This is a CORRECTNESS fix, and it is a different kind of thing from the two
+changes that preceded it.** Both of those were workarounds for this defect:
 
-**What the paper says.** Nothing. It names PointPillars as the backbone and
-refers to "classification maps" and "regression maps", but specifies no
-regression parameter count, no angle encoding, no direction classifier and no
-treatment of orientation ambiguity. The head design is inherited by
-implication, not by statement.
-
-**What we implement.** A single sine channel, encoded and decoded
-consistently in three places:
-
-| | code | operation |
+| change | kind | still needed? |
 |---|---|---|
-| encode | `cpbench/data/preprocessing.py:255` | `reg[:, 6] = sin(g_yaw - anchor_yaw)` |
-| decode (fusion, autograd) | `corabench/fusion/pac.py` | `alpha = anchor_yaw + asin(clamp(reg[:, 6], ...))` |
-| decode (inference, numpy) | `cpbench/data/postprocessing.py:82` | `boxes[:, 6] = an[:, 6] + arcsin(clip(rg[:, 6], -1, 1))` |
+| `asin` epsilon clamp (96fbb2a) | **workaround** | **YES.** `asin'(±1) = ∞` is a property of `asin`, and `reg[:, 6]` is an unconstrained prediction (RECON-5). The scan fix shrinks the gradient reaching it so the reporter may stop firing, but the singularity is untouched |
+| `dt_max = 0.2` soft bound | **workaround** | **NO, numerically.** SSD is correct and stable at any Δ, so the ceiling buys nothing once the scan is right — and it caps the SSM's expressible timescales, a non-paper constraint. **Retained only as a control** so the SSD rewrite is the single moving variable in its first run; to be removed in a follow-up |
 
-The pair is self-consistent — `asin` correctly inverts `sin` — and that is
-the problem: the encoding itself is lossy in three compounding ways.
+**What the first SSD run does NOT test.** With `dt_max = 0.2` still active, Δ is
+pinned at 0.2 and the run therefore says **nothing** about whether the SSD form
+is stable under a *learning* Δ. That is a deliberate second step: prove the
+scan with Δ held, then release Δ and prove it again.
 
-**1. `reg[:, 6]` is unconstrained.** It is a raw conv output trained by
-smooth-L1 against a target in `[-1, 1]`. Nothing confines it to that range,
-so the decode clamp fires as ordinary behaviour rather than as an edge case.
-
-**2. `asin` has range `[-pi/2, pi/2]`.** Half the yaw circle is
-unrepresentable no matter what the network predicts. A box yawed beyond
-`+-90 deg` from its anchor cannot be decoded correctly.
-
-**3. `sin(D) = sin(pi - D)` — heading is 180-degree ambiguous.** One sine
-channel cannot distinguish a vehicle from the same vehicle facing backwards.
-This is exactly why the PointPillars/OpenCOOD convention pairs sine encoding
-with a **direction classifier**, and `A8_yaw: sin_encoding_no_dir_classifier`
-records that we ship without one. The ambiguity was documented; its
-consequence was not.
-
-**Consequence for reported numbers.** `postprocessing.py` runs the same
-`arcsin` decode, in numpy, outside autograd — so it carries the modelling
-defect without the gradient hazard that `pac.py` had. **Validation AP is
-therefore computed on saturated, direction-ambiguous yaw.** Any AP produced
-before this is fixed is a pipeline-completes signal, not a quality number,
-and must be caveated as pre-decode-fix wherever it is quoted.
-
-**The intended fix, and why it is not in this change.** `atan2` over a
-`(sin, cos)` pair fixes all three at once: bounded outputs, the full
-`[-pi, pi]` range, no singular derivative. It requires `Nreg` 7 -> 8, which
-lands in **shared** `cpbench` code — `data/preprocessing.py` (encode and
-`reg_t` shape), `data/postprocessing.py` (BoxDecoder), `models/heads.py`
-(`num_anchors * 7`), `training/losses.py` (`reshape(b, a, 7, h, w)`) — all of
-which the other four paper packages decode against. That is a cross-package
-change to the layer `test_layering.py` exists to protect, so it does not ride
-along with anything else.
-
-A corabench-local partial is `asin(tanh(r))`, whose derivative `sech(r)` is
-bounded in `(0, 1]`: smooth, no clamp, monotone onto `(-pi/2, pi/2)`. It
-fixes (1) and the singularity, **not** (2) or (3), and the encode would have
-to match. Recorded as an option, not a recommendation.
-
-**Status: reported, not implemented.** The `asin` epsilon clamp (96fbb2a) is a
-numerical guard on the gradient only and changes none of the above.
+**Memory.** The pairwise decay is `(Bt, Lc, Lc, D, N)` = 32 MB per chunk at
+`Lc=64` on the OPV2V grid, and autograd saves both the `clamp` input and the
+`exp` output — 35.85 GB across 138 chunks × 4 directions, which would OOM a
+46 GB card. Per-chunk gradient checkpointing recomputes instead of storing:
+**0.31 GB saved plus ~96 MB transient, a projected 9.24 GB peak against the
+10.82 GB the `b/E` form actually used.** The rewrite is cheaper in memory than
+what it replaces. Statistics are gathered *outside* the checkpointed region,
+because checkpointing runs the forward twice and would double-count them.
 
 #### RECON-3: `L_align` reduction — the paper sums, we average (A6)
 
