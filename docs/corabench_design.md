@@ -105,10 +105,10 @@ assumption**, logged with every experiment:
 |---|-----------|--------------------|
 | A1 | Exact attention block in LC ("(Xu et al. 2022b)") | OPV2V `AttFusion` scaled-dot self-attention over the pixel dimension |
 | A2 | S_coll aggregation | Σ_j σ(M⁽¹⁾_j→i) ⊙ Q_j (winner's confidence per cell) |
-| A3 | How (C′,R′) and (C″,R″) are fused in PAC | 1×1 conv over channel concat |
+| A3 | How (C′,R′) and (C″,R″) are fused in PAC | 1×1 conv over channel concat, **with `fuse_cls.bias` initialised to −4.59** (the `−log(99)` focal prior). PAC's classification output is produced here rather than by `DetectionHead`, so it does not otherwise receive that prior; without it PAC starts confident on background and contributes ~47.6 of the ~50.1 step-0 classification loss (job 547612). The bias is load-bearing, not cosmetic — and it is an alternative to, not a complement of, the additive-gating fix in RECON-1 (§1.5) |
 | A4 | Uncertainty recalibration formula | δ′ = δ · σ(−U) (learned down-weighting); alternative δ′ = δ·(1−σ(U)) behind a flag |
-| A5 | Teacher branch construction | same LC module (shared weights) fed dense warped F_j summed without masking; gradient stops into teacher |
-| A6 | Total loss | L = L_cls(focal) + L_reg(smooth-L1) on LC head + local ego head + PAC output, + λ_align·L_align (λ_align = 1.0 default) |
+| A5 | Teacher branch construction | **independent EMA target network**: `copy.deepcopy(lc)` with `requires_grad_(False)`, updated under `@torch.no_grad()` by `W_t ← m·W_t + (1−m)·W_s` (momentum 0.999, buffers copied too), fed dense warped F_j summed without masking; `align_loss` detaches the teacher output. The student is held in a plain list so it is not double-registered in `parameters()`/`state_dict()`. **Superseded shared weights (5813c24)** — sharing detached only the *output*, not the weights, so the target outran the student and `L_align` reached ~5e16 over 15 epochs |
+| A6 | Total loss | Per-branch weighted sum with **five** terms, not three (`training/losses.py`): `L = w_local·L_local + w_lc·L_lc + w_pac·L_pac + λ_align·L_align + u_reg·L_u`, where each `L_branch = L_cls(focal) + reg_weight·L_reg(smooth-L1)`. Defaults `w_local = w_lc = w_pac = 1.0`, `λ_align = 1.0`, `reg_weight = 2.0`. **The focal term is evaluated in two different spaces**: the local head uses `binary_cross_entropy_with_logits` on raw logits, while LC and PAC use the probability-space form inside a float32 island, because they consume the recalibrated product `σ(cls)·σ(−U)` (A4) which is not the sigmoid of any single logit — see §1.6. **`u_reg·L_u` is an undocumented-until-now fifth term**: `L_u = mean(u_lc²) + mean(u_pac²)`, `u_reg = 1e-4` — the only thing bounding \|U\|. **RECON, see §1.6** |
 | A7 | PE form | sinusoidal embedding of the 8-vector (x,y,z,l,h,w,α,δ) per cell, OpenCOOD anchor decode |
 | A8 | Nreg | 7 box params × 2 anchors (OpenCOOD PointPillar convention) |
 | A9 | CSSM scan order | VMamba-style 2-D cross-scan (4 directions), merged |
@@ -188,6 +188,43 @@ the gate keeps its wrong sign.
 `fuse_cls` bias in the same commit, because the two are alternatives rather
 than complements — with additive gating the incoming `-4.59` survives and a
 second `-4.59` would suppress background to `p ≈ 1e-4`.
+
+#### RECON-2: `u_reg = 1e-4`, the uncertainty penalty (A6)
+
+**What it is.** `training/losses.py` adds `u_reg · (mean(u_lc²) + mean(u_pac²))`
+to the objective. Its stated purpose is to keep the uncertainty maps bounded:
+"without it the recalibration path can push |U| arbitrarily high on background
+cells". It is the **only** term that constrains `|U|`; nothing else in the
+model or the loss references `U` except the recalibration itself.
+
+**What the paper says.** Nothing. The paper specifies the recalibration (A4)
+but no penalty on `U`, so both the term and its coefficient are reconstructed.
+
+**Measured magnitude (job 547612).** `E[u²] = mean² + std²` from the
+`fusion/uncertainty_*` taps:
+
+| | `u_lc` E[u²] | `u_pac` E[u²] | `L_u` | `u_reg · L_u` | share of a ~50 objective |
+|---|---|---|---|---|---|
+| step 0 | 0.0032 | 0.0710 | 0.074 | **7.4e-6** | **1.5e-5 %** |
+| step 44 | 18.29 | 226.02 | 244.30 | **0.0244** | **0.048 %** |
+
+**So the penalty never bound anything.** `U` drifted from mean +0.25 to mean
++11.43 — a 45× excursion, `σ(−U)` collapsing from 0.437 to ~1e-5 — while the
+term meant to prevent exactly that contributed at most **0.05%** of the
+objective, and 1.5e-5% at initialisation. A coefficient three to four orders
+of magnitude larger would have been needed to register.
+
+**Caveat on that table:** the two rows are different steps. `U ≈ +11.4` is
+step 44, where the total loss was already `inf`, so the 0.048% column uses
+the step-0 total of 50.81 as a stand-in denominator rather than a real
+contemporaneous ratio. The order of magnitude is right; the ratio is
+indicative, not exact.
+
+**Status: RECON, and untested in any regime where it bound anything.** Every
+run to date either produced a non-finite loss or was aborted, so there is no
+observation of this term actually doing work. `u_reg` is deliberately **not**
+changed: raising it is a change to the objective, and the objective should not
+move in the same run as a numerical fix.
 
 ---
 

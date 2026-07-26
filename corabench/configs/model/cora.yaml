@@ -53,7 +53,11 @@ assumptions:
   A2_s_coll: winner_confidence
   A3_pac_fuse: conv_concat
   A4_recalibration: sigmoid_neg
-  A5_teacher: shared_lc_dense_weighted
+  # Was `shared_lc_dense_weighted` until 5813c24 replaced shared weights with
+  # an independent EMA target network. This string is copied verbatim into
+  # ExperimentMeta.assumptions and written to every bundle's meta.json, so a
+  # stale value here is a false claim inside the artifact, not just the docs.
+  A5_teacher: ema_target_network_m0.999_dense_weighted
   A6_loss: focal_smoothl1_all_branches
   A7_pe: sinusoidal_8param
   A8_yaw: sin_encoding_no_dir_classifier
