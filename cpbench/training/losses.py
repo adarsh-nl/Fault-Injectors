@@ -89,11 +89,14 @@ class DetectionLoss(nn.Module):
     """
 
     def __init__(self, alpha: float = 0.25, gamma: float = 2.0,
-                 reg_weight: float = 2.0, num_classes: int = 1) -> None:
+                 reg_weight: float = 2.0, num_classes: int = 1,
+                 reg_dim: int = 7) -> None:
         super().__init__()
         self.alpha = float(alpha)
         self.gamma = float(gamma)
         self.reg_weight = float(reg_weight)
+        # See DetectionHead.reg_dim; must match the TargetAssigner.
+        self.reg_dim = int(reg_dim)
         self.num_classes = int(num_classes)
 
     def forward(self, cls_map: torch.Tensor, reg_map: torch.Tensor,
@@ -125,9 +128,10 @@ class DetectionLoss(nn.Module):
         # rescales the learning rate.
         loss_cls = focal[valid].sum() / max(n_positive, 1)
 
-        reg_pred = reg_map.reshape(batch, n_anchors, 7, height, width)
-        reg_pred = reg_pred.permute(0, 3, 4, 1, 2).reshape(-1, 7)
-        reg_true = reg_target.reshape(-1, 7)
+        reg_pred = reg_map.reshape(batch, n_anchors, self.reg_dim,
+                                   height, width)
+        reg_pred = reg_pred.permute(0, 3, 4, 1, 2).reshape(-1, self.reg_dim)
+        reg_true = reg_target.reshape(-1, self.reg_dim)
         if n_positive:
             loss_reg = F.smooth_l1_loss(reg_pred[positive], reg_true[positive],
                                         reduction="sum") / n_positive

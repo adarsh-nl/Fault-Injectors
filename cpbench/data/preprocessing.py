@@ -218,10 +218,15 @@ class TargetAssigner:
     """
 
     def __init__(self, anchor_generator: AnchorGenerator,
-                 pos_iou: float = 0.6, neg_iou: float = 0.45) -> None:
+                 pos_iou: float = 0.6, neg_iou: float = 0.45,
+                 reg_dim: int = 7) -> None:
         self.anchors_hw = anchor_generator
         self.pos_iou = float(pos_iou)
         self.neg_iou = float(neg_iou)
+        # See DetectionHead.reg_dim. 7 = sin only; 8 = sin + cos. The encode
+        # and BOTH decodes must agree on this, or the model optimises a
+        # different yaw than AP is scored on.
+        self.reg_dim = int(reg_dim)
 
     def __call__(self, gt_boxes: np.ndarray) -> Dict[str, torch.Tensor]:
         anchors = self.anchors_hw()                        # (H, W, A, 7)
@@ -230,7 +235,7 @@ class TargetAssigner:
         gt = np.asarray(gt_boxes, dtype=np.float32).reshape(-1, 7)
 
         cls_t = np.zeros((h * w * a,), dtype=np.float32)
-        reg_t = np.zeros((h * w * a, 7), dtype=np.float32)
+        reg_t = np.zeros((h * w * a, self.reg_dim), dtype=np.float32)
         if len(gt):
             iou = standup_iou_bev(flat, gt)                # (HWA, G)
             best_gt = iou.argmax(axis=1)
@@ -246,7 +251,10 @@ class TargetAssigner:
 
             an, g = flat[pos], gt[best_gt[pos]]
             d = np.sqrt(an[:, 3] ** 2 + an[:, 4] ** 2) + _EPS
-            reg = np.zeros_like(an)
+            # NOT zeros_like(an): `an` is BOX-7 (x,y,z,l,w,h,yaw) and stays 7,
+            # while the regression encoding is reg_dim wide. Conflating the
+            # two is the mistake that would silently drop the cos channel.
+            reg = np.zeros((len(an), self.reg_dim), dtype=np.float32)
             reg[:, 0] = (g[:, 0] - an[:, 0]) / d
             reg[:, 1] = (g[:, 1] - an[:, 1]) / d
             reg[:, 2] = (g[:, 2] - an[:, 2]) / (an[:, 5] + _EPS)
@@ -256,4 +264,5 @@ class TargetAssigner:
             reg_t[pos] = reg
 
         return {"cls_target": torch.from_numpy(cls_t.reshape(h, w, a)),
-                "reg_target": torch.from_numpy(reg_t.reshape(h, w, a, 7))}
+                "reg_target": torch.from_numpy(
+                    reg_t.reshape(h, w, a, self.reg_dim))}

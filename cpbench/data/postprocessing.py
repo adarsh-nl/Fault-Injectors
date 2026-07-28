@@ -43,11 +43,14 @@ class BoxDecoder:
     def __init__(self, anchor_generator: AnchorGenerator,
                  score_threshold: float = 0.2,
                  scores_are_logits: bool = True,
-                 max_boxes: int = 300) -> None:
+                 max_boxes: int = 300, reg_dim: int = 7) -> None:
         self.anchor_generator = anchor_generator
         self.score_threshold = float(score_threshold)
         self.scores_are_logits = scores_are_logits
         self.max_boxes = int(max_boxes)
+        # See DetectionHead.reg_dim. MUST match the TargetAssigner that built
+        # the targets and the autograd decode in corabench/fusion/pac.py.
+        self.reg_dim = int(reg_dim)
 
     def __call__(self, cls_map: torch.Tensor, reg_map: torch.Tensor,
                  score_override: Optional[torch.Tensor] = None
@@ -61,9 +64,10 @@ class BoxDecoder:
         # (A, H, W) -> (H, W, A); single-class heads: Ncls folded into A dim
         scores = scores_t.detach().float().cpu().numpy().reshape(a, h, w)
         scores = np.transpose(scores, (1, 2, 0)).ravel()
-        reg = reg_map.detach().float().cpu().numpy().reshape(a, 7, h, w)
-        reg = np.transpose(reg, (2, 3, 0, 1)).reshape(-1, 7)
-        flat_anchors = anchors.reshape(-1, 7)
+        reg = reg_map.detach().float().cpu().numpy().reshape(
+            a, self.reg_dim, h, w)
+        reg = np.transpose(reg, (2, 3, 0, 1)).reshape(-1, self.reg_dim)
+        flat_anchors = anchors.reshape(-1, 7)          # BOX-7, stays 7
 
         keep = scores >= self.score_threshold
         if not keep.any():

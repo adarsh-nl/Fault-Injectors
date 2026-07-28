@@ -55,17 +55,23 @@ class DetectionHead(nn.Module):
     Inputs   F (N, C, H, W).
     Outputs  dict:
         cls (N, A*num_classes, H, W) logits
-        reg (N, A*7, H, W) box deltas (TargetAssigner encoding)
+        reg (N, A*reg_dim, H, W) box deltas (TargetAssigner encoding)
     `branch` labels the tap context ('local', 'lc', ...).
     """
 
     def __init__(self, in_channels: int, num_anchors: int = 2,
-                 num_classes: int = 1) -> None:
+                 num_classes: int = 1, reg_dim: int = 7) -> None:
         super().__init__()
         self.num_anchors = num_anchors
         self.num_classes = num_classes
+        # Width of the regression encoding. 7 = SECOND/VoxelNet deltas with a
+        # single sin(yaw) channel; 8 adds the cos companion so yaw decodes with
+        # atan2 over the full circle (RECON-5). DEFAULT 7 is load-bearing:
+        # lgcpbench decodes released OpenCOOD checkpoints through the shared
+        # BoxDecoder and those weights have num_anchors*7 regression heads.
+        self.reg_dim = int(reg_dim)
         self.cls_head = nn.Conv2d(in_channels, num_anchors * num_classes, 1)
-        self.reg_head = nn.Conv2d(in_channels, num_anchors * 7, 1)
+        self.reg_head = nn.Conv2d(in_channels, num_anchors * self.reg_dim, 1)
         # focal-loss-friendly prior: rare positives at init
         nn.init.constant_(self.cls_head.bias, -4.59)   # sigmoid ~= 0.01
 
