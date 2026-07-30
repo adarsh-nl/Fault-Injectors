@@ -70,9 +70,9 @@ class DetectionLoss(nn.Module):
     Shapes
     ------
     cls_map     (B, A*num_classes, H, W)
-    reg_map     (B, A*7, H, W)
+    reg_map     (B, A*reg_dim, H, W)
     cls_target  (B, H, W, A)      1 positive, 0 negative, -1 ignore
-    reg_target  (B, H, W, A, 7)
+    reg_target  (B, H, W, A, reg_dim)
 
     Regression is computed on positive anchors only. Including negatives
     would train the box head on anchors that have no box, which dominates the

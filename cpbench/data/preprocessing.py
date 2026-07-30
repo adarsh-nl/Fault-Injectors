@@ -206,15 +206,20 @@ class TargetAssigner:
     Regression encoding (SECOND/VoxelNet deltas, sin yaw):
         tx = (xg - xa) / d,  ty = (yg - ya) / d,  tz = (zg - za) / ha
         tl = log(lg / la),   tw = log(wg / wa),   th = log(hg / ha)
-        tyaw = sin(yaw_g - yaw_a)
+        tyaw = sin(yaw_g - yaw_a)                      reg_dim == 7
+        tyaw = (sin(yaw_g - yaw_a), cos(yaw_g - yaw_a))  reg_dim >= 8
         with d = sqrt(la^2 + wa^2).
-    sin() keeps the target bounded and makes the head insensitive to the
-    180-degree box-flip ambiguity, which BEV IoU cannot see anyway (no
-    direction classifier -- documented deviation, config `assumption` A8).
+
+    At reg_dim 7 the single sin() channel keeps the target bounded but is
+    180-degree ambiguous: sin(20 deg) == sin(160 deg), so the two encode
+    identically and asin() cannot tell them apart (config `assumption` A8).
+    At reg_dim >= 8 yaw is (sin, cos) and decodes by atan2, which is
+    direction-unambiguous and has no singularity. Channel 7 is written ONLY
+    at reg_dim >= 8.
 
     Outputs (torch tensors)
-        cls_target (H, W, A)      1 pos / 0 neg / -1 ignore
-        reg_target (H, W, A, 7)   deltas (defined only where positive)
+        cls_target (H, W, A)            1 pos / 0 neg / -1 ignore
+        reg_target (H, W, A, reg_dim)   deltas (defined only where positive)
     """
 
     def __init__(self, anchor_generator: AnchorGenerator,
@@ -260,7 +265,13 @@ class TargetAssigner:
             reg[:, 2] = (g[:, 2] - an[:, 2]) / (an[:, 5] + _EPS)
             reg[:, 3:6] = np.log(np.maximum(g[:, 3:6], _EPS) /
                                  np.maximum(an[:, 3:6], _EPS))
-            reg[:, 6] = np.sin(g[:, 6] - an[:, 6])
+            dyaw = g[:, 6] - an[:, 6]
+            reg[:, 6] = np.sin(dyaw)
+            if self.reg_dim >= 8:
+                # Channel 7 exists ONLY at reg_dim >= 8. Writing it
+                # unconditionally would IndexError the four packages that
+                # stay at 7.
+                reg[:, 7] = np.cos(dyaw)
             reg_t[pos] = reg
 
         return {"cls_target": torch.from_numpy(cls_t.reshape(h, w, a)),

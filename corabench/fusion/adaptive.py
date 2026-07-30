@@ -35,7 +35,7 @@ class AdaptiveFusion(nn.Module):
 
     Inputs
     ------
-    cls_lc, reg_lc    (B, A*ncls, H, W), (B, A*7, H, W) feature branch.
+    cls_lc, reg_lc    (B, A*ncls, H, W), (B, A*reg_dim, H, W) feature branch.
     cls_pac, reg_pac  same shapes, object branch.
 
     `forward` returns the recalibrated probability maps (differentiable,

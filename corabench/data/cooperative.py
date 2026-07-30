@@ -78,14 +78,18 @@ class CoRADataset(Dataset):
                  max_points_per_pillar: int = 32, max_pillars: int = 20000,
                  max_agents: int = 5, comm_range_m: float = 70.0,
                  categories: Optional[Sequence[str]] = None,
-                 gt_mode: str = "merge") -> None:
+                 gt_mode: str = "merge", reg_dim: int = 7) -> None:
         self.gt_mode = gt_mode
         self.adapter = adapter
         self.grid = grid
         self.bridge = bridge or DataFaultBridge(None, fps=getattr(adapter, "fps", 10.0))
         self.voxelizer = PillarVoxelizer(grid, max_points_per_pillar, max_pillars)
         self.anchor_generator = anchor_generator or AnchorGenerator(grid)
-        self.target_assigner = target_assigner or TargetAssigner(self.anchor_generator)
+        # reg_dim is used ONLY for the fallback assigner. When common.py
+        # builds one it is already reg_dim-correct and wins, so this cannot
+        # become a competing source of truth.
+        self.target_assigner = target_assigner or TargetAssigner(
+            self.anchor_generator, reg_dim=reg_dim)
         self.max_agents = int(max_agents)
         self.comm_range_m = float(comm_range_m)
         self.categories = list(categories) if categories else None

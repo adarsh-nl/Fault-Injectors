@@ -26,7 +26,7 @@ class BoxDecoder:
     Inputs
     ------
     cls_map : (A*Ncls, H, W) torch tensor of logits or probabilities.
-    reg_map : (A*7, H, W) torch tensor of regression deltas.
+    reg_map : (A*reg_dim, H, W) torch tensor of regression deltas.
 
     Output
     ------
@@ -83,5 +83,16 @@ class BoxDecoder:
         boxes[:, 1] = rg[:, 1] * d + an[:, 1]
         boxes[:, 2] = rg[:, 2] * (an[:, 5] + _EPS) + an[:, 2]
         boxes[:, 3:6] = np.exp(np.clip(rg[:, 3:6], -5, 5)) * an[:, 3:6]
-        boxes[:, 6] = an[:, 6] + np.arcsin(np.clip(rg[:, 6], -1.0, 1.0))
+        # THE SHARED DECODE BRANCH. This is the one place corabench (reg_dim 8)
+        # and cobevt / v2xvit / where2comm / lgcp (reg_dim 7) share decode code,
+        # so it must branch rather than assume. rg[:, 7] MUST NOT be read at
+        # reg_dim 7 -- that column does not exist and would IndexError.
+        # Must stay identical to the autograd decode in corabench/fusion/pac.py.
+        if self.reg_dim >= 8:
+            # sin, cos -> atan2: direction-unambiguous, no singularity, and
+            # scale-invariant so the unit-norm penalty need only be soft.
+            boxes[:, 6] = an[:, 6] + np.arctan2(rg[:, 6], rg[:, 7])
+        else:
+            # Legacy single-sin path, 180-degree ambiguous by construction.
+            boxes[:, 6] = an[:, 6] + np.arcsin(np.clip(rg[:, 6], -1.0, 1.0))
         return boxes.astype(np.float32), scores[idx].astype(np.float32)

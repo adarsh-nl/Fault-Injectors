@@ -84,7 +84,8 @@ class CoRAModel(nn.Module):
                  fusion: Optional[Dict[str, Any]] = None,
                  head: Optional[Dict[str, Any]] = None,
                  teacher_enabled: bool = True,
-                 score_threshold: float = 0.2) -> None:
+                 score_threshold: float = 0.2,
+                 reg_dim: int = 7) -> None:
         super().__init__()
         # Before any submodule is built: the anchors, the decoder and every
         # spatial op are sized from grid.feature_hw, while the backbone
@@ -95,6 +96,13 @@ class CoRAModel(nn.Module):
 
         self.grid = grid
         self.num_anchors, self.num_classes = num_anchors, num_classes
+        # SINGLE SOURCE OF TRUTH for the regression width inside the model.
+        # Both DetectionHeads, PAC (via nreg_ch) and the BoxDecoder are sized
+        # from this one attribute, so they cannot disagree with each other.
+        # The TargetAssigner and the loss live outside the model and are
+        # checked against it by assert_reg_dim_consistent() at startup.
+        # Default stays 7: the four non-corabench packages rely on it.
+        self.reg_dim = int(reg_dim)
 
         self.encoder = PointPillarEncoder(
             grid.grid_hw, vfe_channels=vfe_channels,
@@ -102,8 +110,10 @@ class CoRAModel(nn.Module):
             block_layers=block_layers, upsample_channels=upsample_channels,
             out_channels=channels)
         self.conf_head = ConfidenceHead(channels)
-        self.local_head = DetectionHead(channels, num_anchors, num_classes)
-        self.lc_head = DetectionHead(channels, num_anchors, num_classes)
+        self.local_head = DetectionHead(channels, num_anchors, num_classes,
+                                        reg_dim=self.reg_dim)
+        self.lc_head = DetectionHead(channels, num_anchors, num_classes,
+                                     reg_dim=self.reg_dim)
 
         self.cit = CITModule(**(cit or {}))
         cssm_module = CSSM(channels, **(cssm or {}))
@@ -114,11 +124,15 @@ class CoRAModel(nn.Module):
         self.anchor_generator = AnchorGenerator(grid, **head.get("anchor", {}))
         anchors = torch.from_numpy(self.anchor_generator())
         ncls_ch = num_anchors * num_classes
-        self.pac = PACModule(ncls_ch, num_anchors * 7, anchors, **(pac or {}))
+        # PAC DERIVES its reg_dim as nreg_ch // num_anchors, so passing the
+        # product here is what keeps it in lockstep with the heads.
+        self.pac = PACModule(ncls_ch, num_anchors * self.reg_dim, anchors,
+                             **(pac or {}))
 
         decoder = BoxDecoder(self.anchor_generator,
                              score_threshold=score_threshold,
-                             scores_are_logits=False)
+                             scores_are_logits=False,
+                             reg_dim=self.reg_dim)
         self.adaptive = AdaptiveFusion(ncls_ch, decoder=decoder,
                                        **(fusion or {}))
 

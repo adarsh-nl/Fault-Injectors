@@ -23,8 +23,9 @@ import torch
 from ..training.losses import CoRALoss
 from ..training.trainer import Trainer
 from cpbench.utils.config import load_config
-from .common import (build_adapters, build_cora_dataset, build_experiment,
-                     build_grid, build_model, build_taps, resolve_device)
+from .common import (assert_reg_dim_consistent, build_adapters,
+                     build_cora_dataset, build_experiment, build_grid,
+                     build_model, build_taps, resolve_device)
 from cpbench.faults.bridge import DataFaultBridge
 
 logging.basicConfig(level=logging.INFO,
@@ -70,17 +71,22 @@ def main() -> None:
         train_bridge = DataFaultBridge(
             {"pipeline": train_noise} if train_noise else None,
             fps=fps, seed=int(cfg["seed"]))
+        reg_dim = int(cfg["model"].get("reg_dim", 7))
         train_set = build_cora_dataset(
             ds_cfg, grid, build_adapters(ds_cfg, ds_cfg.get("train_split"),
                                          cfg.get("data_root")),
-            train_bridge)
+            train_bridge, reg_dim=reg_dim)
         val_set = build_cora_dataset(
             ds_cfg, grid, build_adapters(ds_cfg, ds_cfg.get("val_split"),
                                          cfg.get("data_root")),
-            None)
+            None, reg_dim=reg_dim)
 
         model = build_model(cfg, grid).to(device)
-        loss_fn = CoRALoss(**{k: v for k, v in cfg["model"]["loss"].items()})
+        # reg_dim comes from model.reg_dim, NOT from the loss config block:
+        # a second key under model.loss would be a second source of truth.
+        loss_fn = CoRALoss(reg_dim=reg_dim,
+                           **{k: v for k, v in cfg["model"]["loss"].items()})
+        assert_reg_dim_consistent(model, train_set, loss_fn)
         # Taps during TRAINING, not just evaluation: StatsTap already records
         # n_nan / n_inf per location, so `taps=stats` localises a non-finite
         # forward to the module that produced it. Without this the training

@@ -115,15 +115,16 @@ def focal_loss_prob(prob: torch.Tensor, cls_target: torch.Tensor,
 def smooth_l1_reg_loss(reg_map: torch.Tensor,
                        reg_target: torch.Tensor,
                        cls_target: torch.Tensor,
-                       beta: float = 1.0 / 9.0) -> torch.Tensor:
+                       beta: float = 1.0 / 9.0,
+                       reg_dim: int = 7) -> torch.Tensor:
     """Smooth-L1 on positive anchors only.
 
-    reg_map     (B, A*7, H, W); reg_target (B, H, W, A, 7);
+    reg_map     (B, A*reg_dim, H, W); reg_target (B, H, W, A, reg_dim);
     cls_target  (B, H, W, A).
     """
     b, _, h, w = reg_map.shape
     a = cls_target.shape[-1]
-    pred = reg_map.reshape(b, a, 7, h, w).permute(0, 3, 4, 1, 2)
+    pred = reg_map.reshape(b, a, reg_dim, h, w).permute(0, 3, 4, 1, 2)
     pos = cls_target == 1
     if not pos.any():
         return reg_map.sum() * 0.0
@@ -151,7 +152,7 @@ class CoRALoss(nn.Module):
                  w_pac: float = 1.0, lambda_align: float = 1.0,
                  alpha: float = 0.25, gamma: float = 2.0,
                  reg_weight: float = 2.0, local_scope: str = "all",
-                 u_reg: float = 1e-4) -> None:
+                 u_reg: float = 1e-4, reg_dim: int = 7) -> None:
         super().__init__()
         if local_scope not in ("ego", "all"):
             raise ValueError(f"local_scope must be 'ego'|'all', got {local_scope!r}")
@@ -163,19 +164,22 @@ class CoRALoss(nn.Module):
         # keeps the uncertainty maps bounded: without it the recalibration
         # path can push |U| arbitrarily high on background cells
         self.u_reg = u_reg
+        # See DetectionHead.reg_dim. Default stays 7 so the four non-corabench
+        # packages are unaffected; corabench passes 8 from model.reg_dim.
+        self.reg_dim = int(reg_dim)
 
     def _det_loss(self, prob: torch.Tensor, reg_map: torch.Tensor,
                   cls_t: torch.Tensor, reg_t: torch.Tensor):
         """Probability-space branch (LC, PAC): input is a recalibrated score."""
         cls_l = focal_loss_prob(prob, cls_t, self.alpha, self.gamma)
-        reg_l = smooth_l1_reg_loss(reg_map, reg_t, cls_t)
+        reg_l = smooth_l1_reg_loss(reg_map, reg_t, cls_t, reg_dim=self.reg_dim)
         return cls_l, reg_l
 
     def _det_loss_logits(self, logits: torch.Tensor, reg_map: torch.Tensor,
                          cls_t: torch.Tensor, reg_t: torch.Tensor):
         """Logit-space branch (local head): input is a raw pre-sigmoid score."""
         cls_l = focal_loss_logits(logits, cls_t, self.alpha, self.gamma)
-        reg_l = smooth_l1_reg_loss(reg_map, reg_t, cls_t)
+        reg_l = smooth_l1_reg_loss(reg_map, reg_t, cls_t, reg_dim=self.reg_dim)
         return cls_l, reg_l
 
     def forward(self, out: Dict[str, Any],

@@ -150,7 +150,7 @@ _ALL: List[Location] = [
     # Layer 5 -- detection heads (branch context passed via `context`)
     _loc("head/cls_logits", "DetectionHead", "(B, A*Ncls, H, W)",
          "classification logits (branch given in context)"),
-    _loc("head/reg_map", "DetectionHead", "(B, A*7, H, W)",
+    _loc("head/reg_map", "DetectionHead", "(B, A*reg_dim, H, W)",
          "box regression map"),
     _loc("head/cls_sigmoid", "DetectionHead", "(B, A*Ncls, H, W)",
          "sigmoid class scores"),

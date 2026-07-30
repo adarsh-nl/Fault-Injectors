@@ -3,6 +3,13 @@ name: cora
 channels: 256
 num_anchors: 2
 num_classes: 1
+# Regression channels per anchor. THE single source of truth: threaded to
+# both DetectionHeads, PAC (via nreg_ch), the BoxDecoder, the
+# TargetAssigner and the loss, and checked for agreement at startup by
+# assert_reg_dim_consistent(). 7 = yaw as one sin channel, decoded by
+# asin and 180-degree ambiguous; 8 = yaw as (sin, cos), decoded by atan2.
+# corabench runs 8; cobevt/v2xvit/where2comm/lgcp keep the 7 default.
+reg_dim: 8
 vfe_channels: 64
 block_channels: [64, 128, 256]
 block_strides: [2, 2, 2]

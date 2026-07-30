@@ -92,10 +92,17 @@ def build_adapters(ds_cfg: Dict[str, Any],
 
 def build_cora_dataset(ds_cfg: Dict[str, Any], grid: GridSpec,
                        adapters: List[Any],
-                       bridge: Optional[DataFaultBridge]):
-    """Wrap adapters into CoRADatasets (shared anchors/bridge), concatenated."""
+                       bridge: Optional[DataFaultBridge],
+                       reg_dim: int = 7):
+    """Wrap adapters into CoRADatasets (shared anchors/bridge), concatenated.
+
+    `reg_dim` must be the SAME value the model is built with -- it decides the
+    width of the regression targets, and at >= 8 whether the assigner writes
+    the cos channel at all. Callers pass cfg["model"]["reg_dim"];
+    assert_reg_dim_consistent() verifies it against the model at startup.
+    """
     anchor_gen = AnchorGenerator(grid)
-    assigner = TargetAssigner(anchor_gen)
+    assigner = TargetAssigner(anchor_gen, reg_dim=reg_dim)
     sets = [CoRADataset(
         adapter, grid, bridge=bridge, anchor_generator=anchor_gen,
         target_assigner=assigner,
@@ -107,10 +114,60 @@ def build_cora_dataset(ds_cfg: Dict[str, Any], grid: GridSpec,
     return sets[0] if len(sets) == 1 else ConcatDataset(sets)
 
 
+def assert_reg_dim_consistent(model, dataset, loss) -> int:
+    """Fail loudly at startup if any producer or consumer of the regression
+    channels disagrees about their width.
+
+    This checks AGREEMENT, never a hardcoded value: cobevt / v2xvit /
+    where2comm / lgcp run every component at 7 and pass, corabench runs every
+    component at 8 and passes, and only a genuine mismatch fails. A mismatch
+    is otherwise near-silent -- the gather in PACModule._decode_params happily
+    returns 7 of 8 channels without erroring, which drops the cos channel and
+    reverts yaw to the 180-degree-ambiguous decode while everything still
+    trains and still reports plausible AP.
+
+    Covers every component that PRODUCES or CONSUMES reg channels:
+    assigner (produces targets), both DetectionHeads (produce), PAC (produces
+    via fuse_reg, consumes in _decode_params), loss (consumes), decoder
+    (consumes).
+    """
+    found = {
+        "local_head": model.local_head.reg_dim,
+        "lc_head": model.lc_head.reg_dim,
+        # PAC derives reg_dim = nreg_ch // num_anchors rather than being told
+        # it. Included anyway: PAC's decode indexes reg[:, 6] and reg[:, 7] at
+        # FIXED positions, so it REQUIRES reg_dim >= 8 to decode via atan2 and
+        # silently falls back to the ambiguous asin path below that. That
+        # coupling is documented here rather than left implicit.
+        "pac": model.pac.reg_dim,
+        "decoder": model.adaptive.decoder.reg_dim,
+    }
+    if loss is not None:            # evaluate.py has no loss to check
+        found["loss"] = loss.reg_dim
+    # build_cora_dataset returns a ConcatDataset when a split has several
+    # scenarios, so the assigner cannot be reached by plain attribute access.
+    subsets = getattr(dataset, "datasets", [dataset]) if dataset is not None else []
+    for i, sub in enumerate(subsets):
+        assigner = getattr(sub, "target_assigner", None)
+        if assigner is not None:
+            found[f"assigner[{i}]"] = assigner.reg_dim
+
+    if len(set(found.values())) > 1:
+        detail = "\n".join(f"    {k:<14} reg_dim={v}"
+                           for k, v in sorted(found.items()))
+        raise ValueError(
+            "reg_dim mismatch between components that produce or consume the "
+            "regression channels:\n" + detail +
+            "\nAll must agree. Set model.reg_dim in the config; it is the "
+            "single source of truth and is threaded to every site.")
+    return next(iter(found.values()))
+
+
 def build_model(cfg: Dict[str, Any], grid: GridSpec) -> CoRAModel:
     m = cfg["model"]
     return CoRAModel(
         grid,
+        reg_dim=int(m.get("reg_dim", 7)),
         channels=int(m["channels"]), num_anchors=int(m["num_anchors"]),
         num_classes=int(m["num_classes"]),
         vfe_channels=int(m["vfe_channels"]),

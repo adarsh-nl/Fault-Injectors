@@ -64,7 +64,7 @@ class PACModule(nn.Module):
     ------
     ego_maps     (cls_i, reg_i): (Ncls_ch, H, W), (Nreg_ch, H, W) -- the
                  ego's LOCAL head outputs (Ncls_ch = A*num_classes,
-                 Nreg_ch = A*7).
+                 Nreg_ch = A*reg_dim).
     collab_maps  list of (cls_j, reg_j) with identical shapes.
     anchors      (H, W, A, 7) buffer for per-cell box decoding.
 
@@ -86,6 +86,16 @@ class PACModule(nn.Module):
         self.ncls_ch, self.nreg_ch = ncls_ch, nreg_ch
         self.k = kernel_size
         self.num_anchors = anchors.shape[2]
+        # reg_dim is DERIVED, never passed: nreg_ch is built as
+        # num_anchors * reg_dim by the caller (corabench/models/cora.py), so
+        # deriving it here makes it impossible for PAC to disagree with the
+        # DetectionHeads. A separate reg_dim parameter would be a second
+        # source of truth that could drift.
+        if nreg_ch % self.num_anchors:
+            raise ValueError(
+                f"nreg_ch={nreg_ch} is not divisible by num_anchors="
+                f"{self.num_anchors}; cannot derive reg_dim")
+        self.reg_dim = nreg_ch // self.num_anchors
         self.register_buffer("anchors", anchors.float(), persistent=False)
 
         io = ncls_ch + nreg_ch
@@ -142,7 +152,8 @@ class PACModule(nn.Module):
                        reg_map: torch.Tensor) -> torch.Tensor:
         """Per-cell (x, y, z, l, h, w, alpha, delta) of the best anchor.
 
-        cls_map (B, A*ncls, H, W), reg_map (B, A*7, H, W) -> (B, 8, H, W).
+        cls_map (B, A*ncls, H, W), reg_map (B, A*reg_dim, H, W) -> (B, 8, H, W).
+        The trailing 8 is BOX-7 + confidence, unrelated to reg_dim.
         Inverse of the TargetAssigner encoding, evaluated at the
         highest-confidence anchor of each cell.
         """
@@ -151,8 +162,16 @@ class PACModule(nn.Module):
         scores = torch.sigmoid(cls_map).reshape(b, a, -1, h, w).amax(dim=2)
         best = scores.argmax(dim=1)                              # (B, H, W)
         conf = scores.amax(dim=1)
-        reg = reg_map.reshape(b, a, 7, h, w)
-        reg = reg.gather(1, best[:, None, None].expand(-1, 1, 7, -1, -1))[:, 0]
+        # BOTH of these are reg_dim, not BOX-7. The `7`s three lines below ARE
+        # BOX-7 (x,y,z,l,w,h,yaw on the anchors) and stay 7 -- conflating the
+        # two breaks the anchor gather. Note the asymmetry this replaces: the
+        # cls path above already used -1, while the reg path was a literal 7.
+        # The gather is the dangerous one: with a stale 7 against a reg_dim-8
+        # tensor it returns 7 of 8 channels WITHOUT erroring, silently dropping
+        # cos and reverting the decode to 180-degree ambiguous.
+        r = self.reg_dim
+        reg = reg_map.reshape(b, a, r, h, w)
+        reg = reg.gather(1, best[:, None, None].expand(-1, 1, r, -1, -1))[:, 0]
         anch = self.anchors.unsqueeze(0).expand(b, -1, -1, -1, -1)  # (B,H,W,A,7)
         anch = anch.gather(3, best[..., None, None].expand(b, h, w, 1, 7))
         anch = anch.squeeze(3).permute(0, 3, 1, 2)               # (B, 7, H, W)
@@ -161,26 +180,32 @@ class PACModule(nn.Module):
         y = reg[:, 1] * d + anch[:, 1]
         z = reg[:, 2] * anch[:, 5] + anch[:, 2]
         lwh = torch.exp(reg[:, 3:6].clamp(-5, 5)) * anch[:, 3:6]
-        # Clamp JUST INSIDE +-1, not to it. asin'(x) = 1/sqrt(1-x^2) is
-        # SINGULAR at x = +-1, so a hard clamp(-1, 1) gives a finite forward
-        # (asin = +-pi/2) and an INFINITE gradient, which then multiplies the
-        # upstream gradient to nan. torch.autograd.set_detect_anomaly named
-        # this as AsinBackward0 in job 549416: the bad gradient flowed back
-        # from PAC's PE decode through the shared encoder, showing up as
-        # encoder=nan and local_head=nan in grad_norm_by_module from batch 31
-        # while pac/lc/lc_head/adaptive stayed finite, with a finite loss and
-        # no non-finite forward tap anywhere.
-        #
-        # At 1 - 1e-6 the derivative is ~707: finite, far below fp16's 65504,
-        # and the forward is unchanged to 6 decimal places. Same trap class as
-        # the fp16 focal clamp (RECON-3) -- a clamp that makes the FORWARD
-        # safe while leaving the BACKWARD singular.
-        #
-        # This is a numerical guard, NOT a fix for the decode itself: reg[:,6]
-        # is an unconstrained prediction of sin(delta_yaw), so it saturates
-        # routinely rather than rarely. See A8 / the decode note in
-        # docs/corabench_design.md.
-        alpha = anch[:, 6] + torch.asin(reg[:, 6].clamp(-1 + 1e-6, 1 - 1e-6))
+        # The autograd twin of the branch in cpbench/data/postprocessing.py.
+        # The two MUST stay identical or the model optimises a different yaw
+        # than AP is scored on. reg[:, 7] MUST NOT be read at reg_dim 7.
+        if self.reg_dim >= 8:
+            # sin, cos -> atan2. Smooth everywhere, no singularity, no clamp,
+            # direction-unambiguous. This is what replaced the asin decode:
+            # reg[:, 6] was an unconstrained prediction of sin(delta_yaw) that
+            # reached amax 17.9 against a valid [-1, 1] domain, and asin'(x) =
+            # 1/sqrt(1-x^2) is SINGULAR at +-1, so a hard clamp gave a finite
+            # forward and an INFINITE gradient. set_detect_anomaly named it as
+            # AsinBackward0 in job 549416 (encoder and local_head nan from
+            # batch 31, pac/lc/lc_head/adaptive finite, loss finite, no
+            # non-finite forward tap anywhere). atan2 removes the singularity
+            # rather than guarding it, and is scale-invariant, so the
+            # (sin, cos) pair is constrained toward unit norm by a soft
+            # penalty rather than hard normalisation -- normalising would
+            # divide by a near-zero norm at init and reintroduce exactly the
+            # backward singularity this removes. See RECON-5.
+            alpha = anch[:, 6] + torch.atan2(reg[:, 6], reg[:, 7])
+        else:
+            # Legacy path for reg_dim 7. Clamped JUST INSIDE +-1, not to it,
+            # for the singularity reason above: at 1 - 1e-6 the derivative is
+            # ~707, finite and far below fp16's 65504, and the forward is
+            # unchanged to 6 decimal places. Still 180-degree ambiguous by
+            # construction -- see A8 / docs/corabench_design.md.
+            alpha = anch[:, 6] + torch.asin(reg[:, 6].clamp(-1 + 1e-6, 1 - 1e-6))
         return torch.stack([x, y, z, lwh[:, 0], lwh[:, 2], lwh[:, 1],
                             alpha, conf], dim=1)                 # (B, 8, H, W)
 

@@ -22,9 +22,10 @@ from typing import Dict, List, Tuple
 from ..evaluation.benchmark import CleanBenchmarkRunner, FaultBenchmarkRunner
 from cpbench.faults.bridge import DataFaultBridge
 from cpbench.utils.config import load_config
-from .common import (build_adapters, build_cora_dataset, build_experiment,
-                     build_grid, build_model, build_taps,
-                     load_checkpoint_into, resolve_device)
+from .common import (assert_reg_dim_consistent, build_adapters,
+                     build_cora_dataset, build_experiment, build_grid,
+                     build_model, build_taps, load_checkpoint_into,
+                     resolve_device)
 
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -83,8 +84,19 @@ def main() -> None:
         model = build_model(cfg, grid)
         load_checkpoint_into(model, args.checkpoint, device)
 
+        reg_dim = int(cfg["model"].get("reg_dim", 7))
+
         def dataset_factory(bridge):
-            return build_cora_dataset(ds_cfg, grid, adapters, bridge)
+            return build_cora_dataset(ds_cfg, grid, adapters, bridge,
+                                      reg_dim=reg_dim)
+
+        # The same startup check train.py and evaluate.py run. benchmark is the
+        # third entry point that builds a model and its own targets, so it can
+        # drift exactly the same way -- and here a silent mismatch is worse: it
+        # would be scored and written into the results bundle as if valid.
+        # dataset_factory(None) is cheap (it only wraps already-built adapters)
+        # and carries the TargetAssigner the check needs.
+        assert_reg_dim_consistent(model, dataset_factory(None), None)
 
         batch_size = int(cfg["trainer"].get("batch_size", 2))
         clean = CleanBenchmarkRunner(
