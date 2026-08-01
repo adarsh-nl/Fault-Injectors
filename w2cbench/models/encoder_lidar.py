@@ -17,7 +17,7 @@ shared core exists to prevent.
 What this module adds is the contract and the geometry checks -- the two
 things a wrapper is for.
 
-    batch["features"]   (P, T, 9)  -> PillarVFE          -> (P, C_vfe)
+    batch["features"]   (P, T, 10)  -> PillarVFE          -> (P, C_vfe)
     batch["coords"]     (P, 3)     -> PointPillarScatter -> (N, C_vfe, H0, W0)
                                    -> BEVBackbone        -> (N, D, H, W)
 """
@@ -50,7 +50,7 @@ class LidarPillarEncoder(ObservationEncoder):
     ------
     grid                cpbench :class:`GridSpec`; drives voxelisation, the
                         feature resolution, the spatial warp and the anchors
-    in_channels         decorated point features (PointPillars: 9)
+    in_channels         decorated point features (OpenCOOD PointPillars: 10)
     vfe_channels        pillar feature width
     block_channels / block_strides / block_layers
                         the BEV backbone pyramid
@@ -64,7 +64,7 @@ class LidarPillarEncoder(ObservationEncoder):
 
     Batch keys read
     ---------------
-    ``features`` (P, T, 9), ``coords`` (P, 3) as [agent, row, col],
+    ``features`` (P, T, 10), ``coords`` (P, 3) as [agent, row, col],
     ``num_points`` (P,), ``record_len`` (B,).
 
     Taps emitted
@@ -83,7 +83,7 @@ class LidarPillarEncoder(ObservationEncoder):
     >>> enc = LidarPillarEncoder(spec, out_channels=32)
     >>> enc.out_channels, enc.feature_hw
     (32, (32, 32))
-    >>> batch = {"features": torch.randn(4, 8, 9),
+    >>> batch = {"features": torch.randn(4, 8, 10),
     ...          "coords": torch.tensor([[0, 1, 1], [0, 2, 2],
     ...                                  [1, 3, 3], [1, 4, 4]]),
     ...          "num_points": torch.full((4,), 8),
@@ -92,7 +92,7 @@ class LidarPillarEncoder(ObservationEncoder):
     torch.Size([2, 32, 32, 32])
     """
 
-    def __init__(self, grid: GridSpec, in_channels: int = 9,
+    def __init__(self, grid: GridSpec, in_channels: int = 10,
                  vfe_channels: int = 64,
                  block_channels: Sequence[int] = (64, 128, 256),
                  block_strides: Sequence[int] = (2, 2, 2),
@@ -135,7 +135,7 @@ class LidarPillarEncoder(ObservationEncoder):
 
         Shapes
         ------
-        in   features (P, T, 9), coords (P, 3), num_points (P,)
+        in   features (P, T, 10), coords (P, 3), num_points (P,)
         out  (N, D, H, W), N = sum(record_len)
         """
         n_agents = self.total_agents(batch)

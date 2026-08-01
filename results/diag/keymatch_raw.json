@@ -1,0 +1,942 @@
+{
+  "cobevt": {
+    "model": "cobevt",
+    "official": {
+      "status": "OK",
+      "tensors": 243,
+      "path": "/local/554122/ckpt/cobevt/net_epoch60.pth"
+    },
+    "reimpl": {
+      "status": "OK",
+      "tensors": 195,
+      "pkg": "cobevtbench",
+      "overrides": [
+        "model=cobevt_lidar",
+        "dataset=opv2v_lidar"
+      ]
+    },
+    "keymatch": {
+      "official_tensors": 243,
+      "reimpl_tensors": 195,
+      "exact_name_and_shape": 0,
+      "pct_official_exact": 0.0,
+      "name_match_shape_differs": 0,
+      "official_only": 243,
+      "reimpl_only": 195,
+      "shape_pairable_among_unmatched": 168,
+      "pct_official_shape_recoverable_upper_bound": 69.14,
+      "examples_exact": [],
+      "examples_name_match_shape_differs": [],
+      "examples_official_only": [
+        "backbone.blocks.0.1.weight",
+        "backbone.blocks.0.10.weight",
+        "backbone.blocks.0.11.bias",
+        "backbone.blocks.0.11.num_batches_tracked",
+        "backbone.blocks.0.11.running_mean",
+        "backbone.blocks.0.11.running_var",
+        "backbone.blocks.0.11.weight",
+        "backbone.blocks.0.2.bias",
+        "backbone.blocks.0.2.num_batches_tracked",
+        "backbone.blocks.0.2.running_mean",
+        "backbone.blocks.0.2.running_var",
+        "backbone.blocks.0.2.weight",
+        "backbone.blocks.0.4.weight",
+        "backbone.blocks.0.5.bias",
+        "backbone.blocks.0.5.num_batches_tracked",
+        "backbone.blocks.0.5.running_mean",
+        "backbone.blocks.0.5.running_var",
+        "backbone.blocks.0.5.weight",
+        "backbone.blocks.0.7.weight",
+        "backbone.blocks.0.8.bias"
+      ],
+      "examples_reimpl_only": [
+        "encoder.backbone.blocks.0.block.0.weight",
+        "encoder.backbone.blocks.0.block.1.bias",
+        "encoder.backbone.blocks.0.block.1.num_batches_tracked",
+        "encoder.backbone.blocks.0.block.1.running_mean",
+        "encoder.backbone.blocks.0.block.1.running_var",
+        "encoder.backbone.blocks.0.block.1.weight",
+        "encoder.backbone.blocks.0.block.10.bias",
+        "encoder.backbone.blocks.0.block.10.num_batches_tracked",
+        "encoder.backbone.blocks.0.block.10.running_mean",
+        "encoder.backbone.blocks.0.block.10.running_var",
+        "encoder.backbone.blocks.0.block.10.weight",
+        "encoder.backbone.blocks.0.block.3.weight",
+        "encoder.backbone.blocks.0.block.4.bias",
+        "encoder.backbone.blocks.0.block.4.num_batches_tracked",
+        "encoder.backbone.blocks.0.block.4.running_mean",
+        "encoder.backbone.blocks.0.block.4.running_var",
+        "encoder.backbone.blocks.0.block.4.weight",
+        "encoder.backbone.blocks.0.block.6.weight",
+        "encoder.backbone.blocks.0.block.7.bias",
+        "encoder.backbone.blocks.0.block.7.num_batches_tracked"
+      ],
+      "official_prefixes": [
+        [
+          "backbone.blocks",
+          114
+        ],
+        [
+          "fusion_net.layers",
+          72
+        ],
+        [
+          "backbone.deblocks",
+          18
+        ],
+        [
+          "naive_compressor.decoder",
+          14
+        ],
+        [
+          "naive_compressor.encoder",
+          7
+        ],
+        [
+          "pillar_vfe.pfn_layers",
+          6
+        ],
+        [
+          "shrink_conv.layers",
+          4
+        ],
+        [
+          "fusion_net.mlp_head",
+          4
+        ],
+        [
+          "cls_head.weight",
+          1
+        ],
+        [
+          "cls_head.bias",
+          1
+        ],
+        [
+          "reg_head.weight",
+          1
+        ],
+        [
+          "reg_head.bias",
+          1
+        ]
+      ],
+      "reimpl_prefixes": [
+        [
+          "encoder.backbone",
+          115
+        ],
+        [
+          "fuse.blocks",
+          66
+        ],
+        [
+          "encoder.vfe",
+          6
+        ],
+        [
+          "fuse.head_norm",
+          2
+        ],
+        [
+          "fuse.head_proj",
+          2
+        ],
+        [
+          "head.cls_head",
+          2
+        ],
+        [
+          "head.reg_head",
+          2
+        ]
+      ]
+    }
+  },
+  "v2xvit": {
+    "model": "v2xvit",
+    "official": {
+      "status": "OK",
+      "tensors": 304,
+      "path": "/local/554122/ckpt/v2xvit/net_epoch60.pth"
+    },
+    "reimpl": {
+      "status": "OK",
+      "tensors": 281,
+      "pkg": "v2xvitbench",
+      "overrides": [
+        "model=v2xvit",
+        "dataset=v2xset"
+      ]
+    },
+    "keymatch": {
+      "official_tensors": 304,
+      "reimpl_tensors": 281,
+      "exact_name_and_shape": 0,
+      "pct_official_exact": 0.0,
+      "name_match_shape_differs": 0,
+      "official_only": 304,
+      "reimpl_only": 281,
+      "shape_pairable_among_unmatched": 250,
+      "pct_official_shape_recoverable_upper_bound": 82.24,
+      "examples_exact": [],
+      "examples_name_match_shape_differs": [],
+      "examples_official_only": [
+        "backbone.blocks.0.1.weight",
+        "backbone.blocks.0.10.weight",
+        "backbone.blocks.0.11.bias",
+        "backbone.blocks.0.11.num_batches_tracked",
+        "backbone.blocks.0.11.running_mean",
+        "backbone.blocks.0.11.running_var",
+        "backbone.blocks.0.11.weight",
+        "backbone.blocks.0.2.bias",
+        "backbone.blocks.0.2.num_batches_tracked",
+        "backbone.blocks.0.2.running_mean",
+        "backbone.blocks.0.2.running_var",
+        "backbone.blocks.0.2.weight",
+        "backbone.blocks.0.4.weight",
+        "backbone.blocks.0.5.bias",
+        "backbone.blocks.0.5.num_batches_tracked",
+        "backbone.blocks.0.5.running_mean",
+        "backbone.blocks.0.5.running_var",
+        "backbone.blocks.0.5.weight",
+        "backbone.blocks.0.7.weight",
+        "backbone.blocks.0.8.bias"
+      ],
+      "examples_reimpl_only": [
+        "encoder.backbone.blocks.0.block.0.weight",
+        "encoder.backbone.blocks.0.block.1.bias",
+        "encoder.backbone.blocks.0.block.1.num_batches_tracked",
+        "encoder.backbone.blocks.0.block.1.running_mean",
+        "encoder.backbone.blocks.0.block.1.running_var",
+        "encoder.backbone.blocks.0.block.1.weight",
+        "encoder.backbone.blocks.0.block.10.bias",
+        "encoder.backbone.blocks.0.block.10.num_batches_tracked",
+        "encoder.backbone.blocks.0.block.10.running_mean",
+        "encoder.backbone.blocks.0.block.10.running_var",
+        "encoder.backbone.blocks.0.block.10.weight",
+        "encoder.backbone.blocks.0.block.3.weight",
+        "encoder.backbone.blocks.0.block.4.bias",
+        "encoder.backbone.blocks.0.block.4.num_batches_tracked",
+        "encoder.backbone.blocks.0.block.4.running_mean",
+        "encoder.backbone.blocks.0.block.4.running_var",
+        "encoder.backbone.blocks.0.block.4.weight",
+        "encoder.backbone.blocks.0.block.6.weight",
+        "encoder.backbone.blocks.0.block.7.bias",
+        "encoder.backbone.blocks.0.block.7.num_batches_tracked"
+      ],
+      "official_prefixes": [
+        [
+          "fusion_net.encoder",
+          137
+        ],
+        [
+          "backbone.blocks",
+          114
+        ],
+        [
+          "backbone.deblocks",
+          18
+        ],
+        [
+          "naive_compressor.decoder",
+          14
+        ],
+        [
+          "naive_compressor.encoder",
+          7
+        ],
+        [
+          "pillar_vfe.pfn_layers",
+          6
+        ],
+        [
+          "shrink_conv.layers",
+          4
+        ],
+        [
+          "cls_head.weight",
+          1
+        ],
+        [
+          "cls_head.bias",
+          1
+        ],
+        [
+          "reg_head.weight",
+          1
+        ],
+        [
+          "reg_head.bias",
+          1
+        ]
+      ],
+      "reimpl_prefixes": [
+        [
+          "encoder.backbone",
+          133
+        ],
+        [
+          "fusion.blocks",
+          111
+        ],
+        [
+          "fusion.ffns",
+          18
+        ],
+        [
+          "encoder.vfe",
+          6
+        ],
+        [
+          "shrink.conv",
+          6
+        ],
+        [
+          "fusion.rte",
+          3
+        ],
+        [
+          "head.cls_head",
+          2
+        ],
+        [
+          "head.reg_head",
+          2
+        ]
+      ]
+    }
+  },
+  "where2comm": {
+    "model": "where2comm",
+    "official": {
+      "status": "OK",
+      "tensors": 148,
+      "path": "/local/554122/ckpt/where2comm/point_pillar_where2comm_v2xset/net_epoch50.pth"
+    },
+    "reimpl": {
+      "status": "OK",
+      "tensors": 126,
+      "pkg": "w2cbench",
+      "overrides": [
+        "model=where2comm_lidar",
+        "dataset=v2xset"
+      ]
+    },
+    "keymatch": {
+      "official_tensors": 148,
+      "reimpl_tensors": 126,
+      "exact_name_and_shape": 0,
+      "pct_official_exact": 0.0,
+      "name_match_shape_differs": 0,
+      "official_only": 148,
+      "reimpl_only": 126,
+      "shape_pairable_among_unmatched": 122,
+      "pct_official_shape_recoverable_upper_bound": 82.43,
+      "examples_exact": [],
+      "examples_name_match_shape_differs": [],
+      "examples_official_only": [
+        "backbone.blocks.0.1.weight",
+        "backbone.blocks.0.10.weight",
+        "backbone.blocks.0.11.bias",
+        "backbone.blocks.0.11.num_batches_tracked",
+        "backbone.blocks.0.11.running_mean",
+        "backbone.blocks.0.11.running_var",
+        "backbone.blocks.0.11.weight",
+        "backbone.blocks.0.2.bias",
+        "backbone.blocks.0.2.num_batches_tracked",
+        "backbone.blocks.0.2.running_mean",
+        "backbone.blocks.0.2.running_var",
+        "backbone.blocks.0.2.weight",
+        "backbone.blocks.0.4.weight",
+        "backbone.blocks.0.5.bias",
+        "backbone.blocks.0.5.num_batches_tracked",
+        "backbone.blocks.0.5.running_mean",
+        "backbone.blocks.0.5.running_var",
+        "backbone.blocks.0.5.weight",
+        "backbone.blocks.0.7.weight",
+        "backbone.blocks.0.8.bias"
+      ],
+      "examples_reimpl_only": [
+        "confidence.head.cls_head.bias",
+        "confidence.head.cls_head.weight",
+        "confidence.head.reg_head.bias",
+        "confidence.head.reg_head.weight",
+        "confidence.smoother.kernel",
+        "encoder.encoder.backbone.blocks.0.block.0.weight",
+        "encoder.encoder.backbone.blocks.0.block.1.bias",
+        "encoder.encoder.backbone.blocks.0.block.1.num_batches_tracked",
+        "encoder.encoder.backbone.blocks.0.block.1.running_mean",
+        "encoder.encoder.backbone.blocks.0.block.1.running_var",
+        "encoder.encoder.backbone.blocks.0.block.1.weight",
+        "encoder.encoder.backbone.blocks.0.block.10.bias",
+        "encoder.encoder.backbone.blocks.0.block.10.num_batches_tracked",
+        "encoder.encoder.backbone.blocks.0.block.10.running_mean",
+        "encoder.encoder.backbone.blocks.0.block.10.running_var",
+        "encoder.encoder.backbone.blocks.0.block.10.weight",
+        "encoder.encoder.backbone.blocks.0.block.3.weight",
+        "encoder.encoder.backbone.blocks.0.block.4.bias",
+        "encoder.encoder.backbone.blocks.0.block.4.num_batches_tracked",
+        "encoder.encoder.backbone.blocks.0.block.4.running_mean"
+      ],
+      "official_prefixes": [
+        [
+          "backbone.blocks",
+          114
+        ],
+        [
+          "backbone.deblocks",
+          18
+        ],
+        [
+          "pillar_vfe.pfn_layers",
+          6
+        ],
+        [
+          "shrink_conv.layers",
+          4
+        ],
+        [
+          "fusion_net.naive_communication",
+          2
+        ],
+        [
+          "cls_head.weight",
+          1
+        ],
+        [
+          "cls_head.bias",
+          1
+        ],
+        [
+          "reg_head.weight",
+          1
+        ],
+        [
+          "reg_head.bias",
+          1
+        ]
+      ],
+      "reimpl_prefixes": [
+        [
+          "encoder.encoder",
+          121
+        ],
+        [
+          "confidence.head",
+          4
+        ],
+        [
+          "confidence.smoother",
+          1
+        ]
+      ]
+    }
+  },
+  "cora": {
+    "model": "cora",
+    "official": {
+      "status": "ABSENT",
+      "reason": "no released weights exist"
+    },
+    "reimpl": {
+      "status": "BLOCKED-BY-IMPORT",
+      "pkg": "corabench",
+      "overrides": [
+        "model=cora",
+        "dataset=opv2v"
+      ],
+      "traceback": "Traceback (most recent call last):\n  File \"/home/nanjaiyalathaa/Fault-Injectors/results/diag/keymatch_diag.py\", line 167, in one\n    re_ = build_reimpl(pkg, ov)\n  File \"/home/nanjaiyalathaa/Fault-Injectors/results/diag/keymatch_diag.py\", line 86, in build_reimpl\n    model = mod.build_model(mod.load(overrides))\n                            ^^^^^^^^\nAttributeError: module 'corabench.scripts.common' has no attribute 'load'\n"
+    }
+  },
+  "cobevt_camera_dynamic": {
+    "model": "cobevt_camera_dynamic",
+    "official": {
+      "status": "OK",
+      "tensors": 648,
+      "path": "/local/554122/ckpt/opv2v_zoo/cobevt_camera_dynamic/net_epoch91.pth"
+    },
+    "reimpl": {
+      "status": "OK",
+      "tensors": 627,
+      "pkg": "cobevtbench",
+      "overrides": [
+        "model=cobevt_camera_dynamic",
+        "dataset=opv2v_camera"
+      ]
+    },
+    "keymatch": {
+      "official_tensors": 648,
+      "reimpl_tensors": 627,
+      "exact_name_and_shape": 0,
+      "pct_official_exact": 0.0,
+      "name_match_shape_differs": 0,
+      "official_only": 648,
+      "reimpl_only": 627,
+      "shape_pairable_among_unmatched": 627,
+      "pct_official_shape_recoverable_upper_bound": 96.76,
+      "examples_exact": [],
+      "examples_name_match_shape_differs": [],
+      "examples_official_only": [
+        "decoder.decoder.0.bias",
+        "decoder.decoder.0.weight",
+        "decoder.decoder.1.bias",
+        "decoder.decoder.1.num_batches_tracked",
+        "decoder.decoder.1.running_mean",
+        "decoder.decoder.1.running_var",
+        "decoder.decoder.1.weight",
+        "decoder.decoder.10.bias",
+        "decoder.decoder.10.num_batches_tracked",
+        "decoder.decoder.10.running_mean",
+        "decoder.decoder.10.running_var",
+        "decoder.decoder.10.weight",
+        "decoder.decoder.12.bias",
+        "decoder.decoder.12.weight",
+        "decoder.decoder.13.bias",
+        "decoder.decoder.13.num_batches_tracked",
+        "decoder.decoder.13.running_mean",
+        "decoder.decoder.13.running_var",
+        "decoder.decoder.13.weight",
+        "decoder.decoder.15.bias"
+      ],
+      "examples_reimpl_only": [
+        "backbone.layers.0.0.bn1.bias",
+        "backbone.layers.0.0.bn1.num_batches_tracked",
+        "backbone.layers.0.0.bn1.running_mean",
+        "backbone.layers.0.0.bn1.running_var",
+        "backbone.layers.0.0.bn1.weight",
+        "backbone.layers.0.0.bn2.bias",
+        "backbone.layers.0.0.bn2.num_batches_tracked",
+        "backbone.layers.0.0.bn2.running_mean",
+        "backbone.layers.0.0.bn2.running_var",
+        "backbone.layers.0.0.bn2.weight",
+        "backbone.layers.0.0.conv1.weight",
+        "backbone.layers.0.0.conv2.weight",
+        "backbone.layers.0.1.bn1.bias",
+        "backbone.layers.0.1.bn1.num_batches_tracked",
+        "backbone.layers.0.1.bn1.running_mean",
+        "backbone.layers.0.1.bn1.running_var",
+        "backbone.layers.0.1.bn1.weight",
+        "backbone.layers.0.1.bn2.bias",
+        "backbone.layers.0.1.bn2.num_batches_tracked",
+        "backbone.layers.0.1.bn2.running_mean"
+      ],
+      "official_prefixes": [
+        [
+          "encoder.encoder",
+          218
+        ],
+        [
+          "fax.cross_views",
+          170
+        ],
+        [
+          "fax.layers",
+          108
+        ],
+        [
+          "fusion_net.layers",
+          72
+        ],
+        [
+          "decoder.decoder",
+          42
+        ],
+        [
+          "fax.downsample_layers",
+          26
+        ],
+        [
+          "fusion_net.mlp_head",
+          4
+        ],
+        [
+          "fax.self_attn",
+          3
+        ],
+        [
+          "seg_head.dynamic_head",
+          2
+        ],
+        [
+          "seg_head.static_head",
+          2
+        ],
+        [
+          "fax.bev_embedding",
+          1
+        ]
+      ],
+      "reimpl_prefixes": [
+        [
+          "backbone.layers",
+          210
+        ],
+        [
+          "sinbevt.blocks",
+          156
+        ],
+        [
+          "sinbevt.bottlenecks",
+          108
+        ],
+        [
+          "fuse.blocks",
+          66
+        ],
+        [
+          "decoder.stages",
+          36
+        ],
+        [
+          "sinbevt.downsamples",
+          26
+        ],
+        [
+          "sinbevt.geometries",
+          7
+        ],
+        [
+          "backbone.stem",
+          6
+        ],
+        [
+          "sinbevt.self_attn",
+          5
+        ],
+        [
+          "fuse.head_norm",
+          2
+        ],
+        [
+          "fuse.head_proj",
+          2
+        ],
+        [
+          "head.head",
+          2
+        ],
+        [
+          "sinbevt.bev_prior",
+          1
+        ]
+      ]
+    }
+  },
+  "cobevt_camera_static": {
+    "model": "cobevt_camera_static",
+    "official": {
+      "status": "OK",
+      "tensors": 646,
+      "path": "/local/554122/ckpt/opv2v_zoo/cobevt_camera_static/net_epoch91.pth"
+    },
+    "reimpl": {
+      "status": "OK",
+      "tensors": 627,
+      "pkg": "cobevtbench",
+      "overrides": [
+        "model=cobevt_camera_static",
+        "dataset=opv2v_camera"
+      ]
+    },
+    "keymatch": {
+      "official_tensors": 646,
+      "reimpl_tensors": 627,
+      "exact_name_and_shape": 0,
+      "pct_official_exact": 0.0,
+      "name_match_shape_differs": 0,
+      "official_only": 646,
+      "reimpl_only": 627,
+      "shape_pairable_among_unmatched": 627,
+      "pct_official_shape_recoverable_upper_bound": 97.06,
+      "examples_exact": [],
+      "examples_name_match_shape_differs": [],
+      "examples_official_only": [
+        "decoder.decoder.0.bias",
+        "decoder.decoder.0.weight",
+        "decoder.decoder.1.bias",
+        "decoder.decoder.1.num_batches_tracked",
+        "decoder.decoder.1.running_mean",
+        "decoder.decoder.1.running_var",
+        "decoder.decoder.1.weight",
+        "decoder.decoder.10.bias",
+        "decoder.decoder.10.num_batches_tracked",
+        "decoder.decoder.10.running_mean",
+        "decoder.decoder.10.running_var",
+        "decoder.decoder.10.weight",
+        "decoder.decoder.12.bias",
+        "decoder.decoder.12.weight",
+        "decoder.decoder.13.bias",
+        "decoder.decoder.13.num_batches_tracked",
+        "decoder.decoder.13.running_mean",
+        "decoder.decoder.13.running_var",
+        "decoder.decoder.13.weight",
+        "decoder.decoder.15.bias"
+      ],
+      "examples_reimpl_only": [
+        "backbone.layers.0.0.bn1.bias",
+        "backbone.layers.0.0.bn1.num_batches_tracked",
+        "backbone.layers.0.0.bn1.running_mean",
+        "backbone.layers.0.0.bn1.running_var",
+        "backbone.layers.0.0.bn1.weight",
+        "backbone.layers.0.0.bn2.bias",
+        "backbone.layers.0.0.bn2.num_batches_tracked",
+        "backbone.layers.0.0.bn2.running_mean",
+        "backbone.layers.0.0.bn2.running_var",
+        "backbone.layers.0.0.bn2.weight",
+        "backbone.layers.0.0.conv1.weight",
+        "backbone.layers.0.0.conv2.weight",
+        "backbone.layers.0.1.bn1.bias",
+        "backbone.layers.0.1.bn1.num_batches_tracked",
+        "backbone.layers.0.1.bn1.running_mean",
+        "backbone.layers.0.1.bn1.running_var",
+        "backbone.layers.0.1.bn1.weight",
+        "backbone.layers.0.1.bn2.bias",
+        "backbone.layers.0.1.bn2.num_batches_tracked",
+        "backbone.layers.0.1.bn2.running_mean"
+      ],
+      "official_prefixes": [
+        [
+          "encoder.encoder",
+          218
+        ],
+        [
+          "fax.cross_views",
+          170
+        ],
+        [
+          "fax.layers",
+          108
+        ],
+        [
+          "fusion_net.layers",
+          72
+        ],
+        [
+          "decoder.decoder",
+          42
+        ],
+        [
+          "fax.downsample_layers",
+          26
+        ],
+        [
+          "fusion_net.mlp_head",
+          4
+        ],
+        [
+          "fax.self_attn",
+          3
+        ],
+        [
+          "seg_head.static_head",
+          2
+        ],
+        [
+          "fax.bev_embedding",
+          1
+        ]
+      ],
+      "reimpl_prefixes": [
+        [
+          "backbone.layers",
+          210
+        ],
+        [
+          "sinbevt.blocks",
+          156
+        ],
+        [
+          "sinbevt.bottlenecks",
+          108
+        ],
+        [
+          "fuse.blocks",
+          66
+        ],
+        [
+          "decoder.stages",
+          36
+        ],
+        [
+          "sinbevt.downsamples",
+          26
+        ],
+        [
+          "sinbevt.geometries",
+          7
+        ],
+        [
+          "backbone.stem",
+          6
+        ],
+        [
+          "sinbevt.self_attn",
+          5
+        ],
+        [
+          "fuse.head_norm",
+          2
+        ],
+        [
+          "fuse.head_proj",
+          2
+        ],
+        [
+          "head.head",
+          2
+        ],
+        [
+          "sinbevt.bev_prior",
+          1
+        ]
+      ]
+    }
+  },
+  "cobevt_lidar_opv2v_nocomp": {
+    "model": "cobevt_lidar_opv2v_nocomp",
+    "official": {
+      "status": "OK",
+      "tensors": 222,
+      "path": "/local/554122/ckpt/opv2v_zoo/cobevt_lidar_opv2v_nocomp/net_epoch19.pth"
+    },
+    "reimpl": {
+      "status": "OK",
+      "tensors": 195,
+      "pkg": "cobevtbench",
+      "overrides": [
+        "model=cobevt_lidar",
+        "dataset=opv2v_lidar"
+      ]
+    },
+    "keymatch": {
+      "official_tensors": 222,
+      "reimpl_tensors": 195,
+      "exact_name_and_shape": 0,
+      "pct_official_exact": 0.0,
+      "name_match_shape_differs": 0,
+      "official_only": 222,
+      "reimpl_only": 195,
+      "shape_pairable_among_unmatched": 168,
+      "pct_official_shape_recoverable_upper_bound": 75.68,
+      "examples_exact": [],
+      "examples_name_match_shape_differs": [],
+      "examples_official_only": [
+        "backbone.blocks.0.1.weight",
+        "backbone.blocks.0.10.weight",
+        "backbone.blocks.0.11.bias",
+        "backbone.blocks.0.11.num_batches_tracked",
+        "backbone.blocks.0.11.running_mean",
+        "backbone.blocks.0.11.running_var",
+        "backbone.blocks.0.11.weight",
+        "backbone.blocks.0.2.bias",
+        "backbone.blocks.0.2.num_batches_tracked",
+        "backbone.blocks.0.2.running_mean",
+        "backbone.blocks.0.2.running_var",
+        "backbone.blocks.0.2.weight",
+        "backbone.blocks.0.4.weight",
+        "backbone.blocks.0.5.bias",
+        "backbone.blocks.0.5.num_batches_tracked",
+        "backbone.blocks.0.5.running_mean",
+        "backbone.blocks.0.5.running_var",
+        "backbone.blocks.0.5.weight",
+        "backbone.blocks.0.7.weight",
+        "backbone.blocks.0.8.bias"
+      ],
+      "examples_reimpl_only": [
+        "encoder.backbone.blocks.0.block.0.weight",
+        "encoder.backbone.blocks.0.block.1.bias",
+        "encoder.backbone.blocks.0.block.1.num_batches_tracked",
+        "encoder.backbone.blocks.0.block.1.running_mean",
+        "encoder.backbone.blocks.0.block.1.running_var",
+        "encoder.backbone.blocks.0.block.1.weight",
+        "encoder.backbone.blocks.0.block.10.bias",
+        "encoder.backbone.blocks.0.block.10.num_batches_tracked",
+        "encoder.backbone.blocks.0.block.10.running_mean",
+        "encoder.backbone.blocks.0.block.10.running_var",
+        "encoder.backbone.blocks.0.block.10.weight",
+        "encoder.backbone.blocks.0.block.3.weight",
+        "encoder.backbone.blocks.0.block.4.bias",
+        "encoder.backbone.blocks.0.block.4.num_batches_tracked",
+        "encoder.backbone.blocks.0.block.4.running_mean",
+        "encoder.backbone.blocks.0.block.4.running_var",
+        "encoder.backbone.blocks.0.block.4.weight",
+        "encoder.backbone.blocks.0.block.6.weight",
+        "encoder.backbone.blocks.0.block.7.bias",
+        "encoder.backbone.blocks.0.block.7.num_batches_tracked"
+      ],
+      "official_prefixes": [
+        [
+          "backbone.blocks",
+          114
+        ],
+        [
+          "fusion_net.layers",
+          72
+        ],
+        [
+          "backbone.deblocks",
+          18
+        ],
+        [
+          "pillar_vfe.pfn_layers",
+          6
+        ],
+        [
+          "shrink_conv.layers",
+          4
+        ],
+        [
+          "fusion_net.mlp_head",
+          4
+        ],
+        [
+          "cls_head.weight",
+          1
+        ],
+        [
+          "cls_head.bias",
+          1
+        ],
+        [
+          "reg_head.weight",
+          1
+        ],
+        [
+          "reg_head.bias",
+          1
+        ]
+      ],
+      "reimpl_prefixes": [
+        [
+          "encoder.backbone",
+          115
+        ],
+        [
+          "fuse.blocks",
+          66
+        ],
+        [
+          "encoder.vfe",
+          6
+        ],
+        [
+          "fuse.head_norm",
+          2
+        ],
+        [
+          "fuse.head_proj",
+          2
+        ],
+        [
+          "head.cls_head",
+          2
+        ],
+        [
+          "head.reg_head",
+          2
+        ]
+      ]
+    }
+  }
+}

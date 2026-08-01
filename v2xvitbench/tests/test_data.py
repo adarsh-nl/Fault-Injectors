@@ -41,7 +41,7 @@ def test_item_has_every_documented_key() -> None:
                 "time_delay", "infra", "velocity", "gt_boxes", "n_agents",
                 "frame", "fault_records"):
         assert key in item, key
-    assert item["features"].shape[1:] == (32, 9)
+    assert item["features"].shape[1:] == (32, 10)
     assert item["coords"].shape[1] == 3
     assert item["time_delay"].dtype == torch.long
     assert item["velocity"].dtype == torch.float32

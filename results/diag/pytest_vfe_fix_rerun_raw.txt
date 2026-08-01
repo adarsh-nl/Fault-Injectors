@@ -1,0 +1,21 @@
+.s........s......s...s.s................................................ [ 22%]
+........................................................................ [ 44%]
+........................................................................ [ 66%]
+........................................................................ [ 88%]
+....................................                                     [100%]
+=============================== warnings summary ===============================
+cpbench/tests/test_segmentation.py::test_miou_excludes_background_by_default
+  /home/nanjaiyalathaa/Fault-Injectors/cpbench/metrics/segmentation.py:197: RuntimeWarning: Mean of empty slice
+    out["pixel_precision"] = float(np.nanmean(precision[reported]))
+
+cpbench/tests/test_segmentation.py::test_miou_excludes_background_by_default
+  /home/nanjaiyalathaa/Fault-Injectors/cpbench/metrics/segmentation.py:199: RuntimeWarning: Mean of empty slice
+    out["pixel_f1"] = float(np.nanmean(f1[reported]))
+
+v2xvitbench/tests/test_training.py::test_a_few_steps_reduce_the_loss_on_a_fixed_batch
+  /home/nanjaiyalathaa/Fault-Injectors/v2xvitbench/tests/test_training.py:103: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+  Consider using tensor.detach() first. (Triggered internally at /__w/pytorch/pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:822.)
+    first = float(terms["loss"]) if first is None else first
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+319 passed, 5 skipped, 3 warnings in 190.23s (0:03:10)

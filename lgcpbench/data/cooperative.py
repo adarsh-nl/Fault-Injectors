@@ -171,7 +171,7 @@ class LGCPDataset:
             extra: Dict[str, Any] = {}
         else:
             tensors = {
-                "features": torch.zeros(0, 1, 9),
+                "features": torch.zeros(0, 1, 10),
                 "coords": torch.zeros(0, 3, dtype=torch.long),
                 "num_points": torch.zeros(0, dtype=torch.long),
             }
@@ -274,7 +274,7 @@ class LGCPDataset:
             # Every CAV was dropped or has empty LiDAR -- a legitimate fault
             # outcome (agent_drop with a high rate), not an error.
             return {
-                "features": torch.zeros(0, 1, 9),
+                "features": torch.zeros(0, 1, 10),
                 "coords": torch.zeros(0, 3, dtype=torch.long),
                 "num_points": torch.zeros(0, dtype=torch.long),
             }

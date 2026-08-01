@@ -65,7 +65,7 @@ class AgentInputs:
 
     Attributes / shapes
     -------------------
-    features    (P, max_points, 9) float  decorated pillar point features
+    features    (P, max_points, 10) float  decorated pillar point features
     coords      (P, 3) int64              [agent_index, row(y), col(x)]
     num_points  (P,) int64                valid points per pillar
     n_agents    V, the number of CAVs in this frame

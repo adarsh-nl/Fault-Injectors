@@ -62,7 +62,7 @@ def _batch(n_agents: int = 3, n_pillars: int = 12, samples: int = 1,
         torch.arange(n_pillars) % 16,
         torch.arange(n_pillars) % 16], dim=1)
     return {
-        "features": torch.randn(n_pillars, 4, 9, generator=generator),
+        "features": torch.randn(n_pillars, 4, 10, generator=generator),
         "coords": coords,
         "num_points": torch.full((n_pillars,), 4),
         "record_len": [n_agents] * samples,

@@ -40,7 +40,7 @@ def _batch(n_agents: int = 2, n_pillars: int = 6) -> dict:
         torch.arange(n_pillars) % 8,
         torch.arange(n_pillars) % 8,
     ], dim=1)
-    return {"features": torch.randn(n_pillars, 8, 9),
+    return {"features": torch.randn(n_pillars, 8, 10),
             "coords": coords,
             "num_points": torch.full((n_pillars,), 8),
             "record_len": [n_agents]}
@@ -102,14 +102,14 @@ def test_total_agents_comes_from_record_len_not_from_the_sensor_tensors() -> Non
 def test_missing_record_len_names_the_key_and_the_reason() -> None:
     enc = LidarPillarEncoder(_spec(), out_channels=32)
     with pytest.raises(KeyError, match="record_len"):
-        enc.total_agents({"features": torch.zeros(1, 8, 9)})
+        enc.total_agents({"features": torch.zeros(1, 8, 10)})
 
 
 def test_no_points_at_all_still_returns_one_map_per_agent() -> None:
     """A frame in which every collaborator was dropped or fully occluded must
     not change the output rank; downstream stages index the agent axis."""
     enc = LidarPillarEncoder(_spec(), out_channels=32).eval()
-    empty = {"features": torch.zeros(0, 8, 9),
+    empty = {"features": torch.zeros(0, 8, 10),
              "coords": torch.zeros(0, 3, dtype=torch.long),
              "num_points": torch.zeros(0, dtype=torch.long),
              "record_len": [2]}

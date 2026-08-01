@@ -125,7 +125,7 @@ def _loc(name: str, module: str, shape: str, desc: str,
 
 _ALL: List[Location] = [
     # -- Layer 0: input (post-fault-bridge, pre-model) -----------------------
-    _loc("input/points", "Where2comm", "(P, T, 9)",
+    _loc("input/points", "Where2comm", "(P, T, 10)",
          "decorated pillar points after voxelisation, already corrupted by "
          "any LiDAR-level fault", "lidar"),
     _loc("input/coords", "Where2comm", "(P, 3)",

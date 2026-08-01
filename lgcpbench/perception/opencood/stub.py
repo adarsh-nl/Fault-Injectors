@@ -171,7 +171,7 @@ def stub_agent_inputs(n_agents: int = 3, n_voxels: int = 40):
     from ..protocol import AgentInputs
 
     return AgentInputs(
-        features=torch.zeros(0, 1, 9),
+        features=torch.zeros(0, 1, 10),
         coords=torch.zeros(0, 3, dtype=torch.long),
         num_points=torch.zeros(0, dtype=torch.long),
         n_agents=n_agents,

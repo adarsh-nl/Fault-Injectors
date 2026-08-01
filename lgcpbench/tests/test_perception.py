@@ -117,7 +117,7 @@ def _agent_inputs(
         dim=1,
     )
     return AgentInputs(
-        features=torch.randn(n_pillars, 32, 9),
+        features=torch.randn(n_pillars, 32, 10),
         coords=coords,
         num_points=torch.randint(1, 32, (n_pillars,)),
         n_agents=n_agents,
@@ -136,7 +136,7 @@ def test_agent_inputs_index_lookup() -> None:
 def test_agent_inputs_rejects_mismatched_ids() -> None:
     with pytest.raises(ValueError):
         AgentInputs(
-            features=torch.zeros(1, 1, 9),
+            features=torch.zeros(1, 1, 10),
             coords=torch.zeros(1, 3, dtype=torch.long),
             num_points=torch.ones(1, dtype=torch.long),
             n_agents=3,
@@ -147,7 +147,7 @@ def test_agent_inputs_rejects_mismatched_ids() -> None:
 def test_agent_inputs_rejects_bad_positions() -> None:
     with pytest.raises(ValueError):
         AgentInputs(
-            features=torch.zeros(1, 1, 9),
+            features=torch.zeros(1, 1, 10),
             coords=torch.zeros(1, 3, dtype=torch.long),
             num_points=torch.ones(1, dtype=torch.long),
             n_agents=2,

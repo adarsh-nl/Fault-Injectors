@@ -65,15 +65,38 @@ class PillarVoxelizer:
     """Convert one point cloud into PointPillars input tensors.
 
     Purpose  the CPU-side half of the PointPillars encoder: group points
-             into vertical pillars on the BEV grid and build the 9-channel
-             decorated point features of Lang et al. (2019).
+             into vertical pillars on the BEV grid and build the 10-channel
+             decorated point features **as OpenCOOD builds them**.
 
     Inputs   points (N, C>=3) float32 (ego frame).
     Outputs  dict of torch tensors:
-             features   (P, max_points, 9)  [x, y, z, intensity,
-                        dx_mean, dy_mean, dz_mean, dx_center, dy_center]
+             features   (P, max_points, 10) [x, y, z, intensity,
+                        dx_mean, dy_mean, dz_mean,
+                        dx_center, dy_center, dz_center]
              coords     (P, 2) int64  [row(y), col(x)] on the dense canvas
              num_points (P,)  int64   valid points per pillar
+
+    Why 10 and not 9
+             Lang et al. (2019) describe a 9-channel decoration, and this
+             class produced 9 until 2026-08-01. Every released checkpoint of
+             every paper this repository benchmarks comes from OpenCOOD,
+             whose ``PillarVFE`` builds **10**: its ``f_center`` is a full
+             3-vector, so the offset from the pillar's geometric centre has a
+             z component too. The keymatch diagnostic
+             (``results/diag/``) measured the consequence directly --
+             ``pillar_vfe.pfn_layers.0.linear.weight`` is ``[64, 10]`` in all
+             three released checkpoints against ``[64, 9]`` here. Producing 9
+             was a reimplementation bug, not a deliberate divergence.
+
+             ``dz_center`` is the offset from the pillar's geometric centre,
+             NOT from the point mean -- the latter is already ``dz_mean``, and
+             duplicating it would waste a channel and mismatch OpenCOOD. For
+             a pillar grid there is exactly one voxel in z, so the pillar
+             centre is ``(zmin + zmax) / 2``, which is OpenCOOD's
+             ``z_offset = voxel_z / 2 + zmin`` evaluated at ``voxel_z =
+             zmax - zmin``. On the released V2XSet/OPV2V geometry
+             (z range -3..1) that is **-1.0**, matching the anchor
+             ``z_center`` default below.
 
     Shapes   P <= max_pillars; pillars are kept in descending point count
              when the cap is hit (densest pillars carry the most signal).
@@ -83,7 +106,7 @@ class PillarVoxelizer:
     >>> vox = PillarVoxelizer(GridSpec((0.4, 0.4), (-40, -40, -3, 40, 40, 1)))
     >>> out = vox(np.random.rand(1000, 4).astype(np.float32) * 20)
     >>> out["features"].shape[2]
-    9
+    10
     """
 
     def __init__(self, grid: GridSpec, max_points_per_pillar: int = 32,
@@ -97,7 +120,9 @@ class PillarVoxelizer:
         if pts.ndim != 2 or pts.shape[1] < 3:
             pts = np.zeros((0, 4), dtype=np.float32)
         xmin, ymin, zmin, xmax, ymax, zmax = self.grid.point_range
-        vx, vy = self.grid.voxel_size
+        # [:2] so a 3-element voxel_size reaches the pillar-grid assertion
+        # below rather than dying here on "too many values to unpack".
+        vx, vy = self.grid.voxel_size[:2]
         h0, w0 = self.grid.grid_hw
 
         # intensity column (pad with zeros when the dataset lacks it)
@@ -128,9 +153,29 @@ class PillarVoxelizer:
                                               return_counts=True)
 
         p = len(uniq)
-        features = np.zeros((p, self.max_points, 9), dtype=np.float32)
+        features = np.zeros((p, self.max_points, 10), dtype=np.float32)
         num_points = np.minimum(counts, self.max_points).astype(np.int64)
         coords = np.stack([uniq // w0, uniq % w0], axis=1).astype(np.int64)
+
+        # Pillar geometric centre in z, i.e. OpenCOOD's
+        # ``z_offset = zmin + voxel_z / 2``. Constant across pillars, unlike
+        # cx / cy, because a *pillar* grid has exactly one voxel in z.
+        #
+        # GridSpec carries no z voxel size -- ``voxel_size`` is (vx, vy) -- so
+        # on every grid in this repository voxel_z IS the full z extent and the
+        # centre is the range midpoint. That is a property of the grids we
+        # happen to have, not of the formula. A future config that supplies a
+        # z voxel which does NOT span the extent (a Griffin or DAIR grid, or
+        # someone pasting OpenCOOD's own ``voxel_size: [0.4, 0.4, 4]``) would
+        # otherwise decorate every point against the wrong pillar centre and
+        # produce a plausible, silently-wrong feature. Fail loudly instead.
+        voxel_z = (self.grid.voxel_size[2] if len(self.grid.voxel_size) > 2
+                   else zmax - zmin)
+        assert abs(voxel_z - (zmax - zmin)) < 1e-6, (
+            f"cz shortcut assumes a single z-voxel pillar grid, but voxel_z="
+            f"{voxel_z} against a z extent of {zmax - zmin} (zmin={zmin}, "
+            f"zmax={zmax}); compute the pillar centre per z-voxel instead")
+        cz = zmin + 0.5 * voxel_z
 
         order = np.argsort(inverse, kind="stable")
         starts = np.zeros(p + 1, dtype=np.int64)
@@ -147,6 +192,7 @@ class PillarVoxelizer:
             cy = ymin + (coords[i, 0] + 0.5) * vy
             features[i, :k, 7] = pv[:, 0] - cx
             features[i, :k, 8] = pv[:, 1] - cy
+            features[i, :k, 9] = pv[:, 2] - cz
 
         return {"features": torch.from_numpy(features),
                 "coords": torch.from_numpy(coords),

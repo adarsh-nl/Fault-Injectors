@@ -43,7 +43,7 @@ def _batch(record_len=(2,), max_cav: int = 3, n_pillars: int = 40) -> dict:
     rows = rng.integers(0, SPEC.grid_hw[0], n_pillars)
     cols = rng.integers(0, SPEC.grid_hw[1], n_pillars)
     return {
-        "features": torch.randn(n_pillars, 8, 9),
+        "features": torch.randn(n_pillars, 8, 10),
         "coords": torch.tensor(np.stack([agent_idx, rows, cols], axis=1)),
         "num_points": torch.full((n_pillars,), 8),
         "record_len": list(record_len),

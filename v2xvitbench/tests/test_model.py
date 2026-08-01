@@ -40,7 +40,7 @@ def _batch(n_agents: int = 3, n_pillars: int = 12, samples: int = 1,
     with agent indices offset by s * n_agents, so batching tests can compare
     sample 0 across batch sizes."""
     generator = torch.Generator().manual_seed(seed)
-    features_one = torch.randn(n_pillars, 4, 9, generator=generator)
+    features_one = torch.randn(n_pillars, 4, 10, generator=generator)
     coords_one = torch.stack([
         torch.arange(n_pillars) % n_agents,
         torch.arange(n_pillars) % 16,

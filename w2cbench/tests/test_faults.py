@@ -60,7 +60,7 @@ def _batch(n_agents: int = 3, n_pillars: int = 12) -> dict:
     coords = torch.stack([torch.arange(n_pillars) % n_agents,
                           torch.arange(n_pillars) % 16,
                           torch.arange(n_pillars) % 16], dim=1)
-    return {"features": torch.randn(n_pillars, 4, 9,
+    return {"features": torch.randn(n_pillars, 4, 10,
                                     generator=_generator(1)),
             "coords": coords, "num_points": torch.full((n_pillars,), 4),
             "record_len": [n_agents],

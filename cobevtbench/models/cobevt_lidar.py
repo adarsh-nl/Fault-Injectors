@@ -76,7 +76,7 @@ class CoBEVTLidar(nn.Module):
 
     Shapes
     ------
-    batch["features"]      (P, max_points, 9)
+    batch["features"]      (P, max_points, 10)
     batch["coords"]        (P, 3) -- [flat agent index, row, col]
     batch["num_points"]    (P,)
     batch["record_len"]    (B,) agents per sample, summing to N_total
@@ -91,7 +91,7 @@ class CoBEVTLidar(nn.Module):
     >>> model = CoBEVTLidar(spec, max_cav=2, encoder_out_channels=32,
     ...                     fuse_depth=1, fuse_window=8, fuse_dim_head=8)
     >>> batch = {
-    ...     "features": torch.randn(6, 4, 9),
+    ...     "features": torch.randn(6, 4, 10),
     ...     "coords": torch.tensor([[0, 1, 1], [0, 2, 2], [1, 3, 3],
     ...                             [1, 4, 4], [1, 5, 5], [0, 6, 6]]),
     ...     "num_points": torch.full((6,), 4),

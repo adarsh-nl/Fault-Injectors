@@ -54,7 +54,7 @@ class CoBEVTLidarDataset(Dataset):
     -------
     ``__getitem__`` returns one scene:
 
-    ``features``      (P, max_points, 9)  pillar features, all agents stacked
+    ``features``      (P, max_points, 10)  pillar features, all agents stacked
     ``coords``        (P, 3)  [agent index within the scene, row, col]
     ``num_points``    (P,)
     ``T_agent_to_ego`` (n_agents, 4, 4)
@@ -70,7 +70,7 @@ class CoBEVTLidarDataset(Dataset):
     >>> ds = CoBEVTLidarDataset(adapter, spec, max_cav=2)
     >>> item = ds[0]
     >>> item["features"].shape[1:], item["coords"].shape[1], item["n_agents"]
-    (torch.Size([32, 9]), 3, 2)
+    (torch.Size([32, 10]), 3, 2)
     """
 
     def __init__(self, adapter, grid: GridSpec, max_cav: int = 5,
@@ -125,7 +125,7 @@ class CoBEVTLidarDataset(Dataset):
 
         return {
             "features": torch.cat(features) if features
-            else torch.zeros(0, self.voxelizer.max_points_per_pillar, 9),
+            else torch.zeros(0, self.voxelizer.max_points_per_pillar, 10),
             "coords": torch.cat(coords) if coords
             else torch.zeros(0, 3, dtype=torch.int64),
             "num_points": torch.cat(num_points) if num_points

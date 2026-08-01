@@ -1,0 +1,17 @@
+{
+  "metric_primary": "ap_70",
+  "coverage": [
+    {"operator": "cobevt",     "checkpoint": "cobevt_lidar",                   "dataset": "v2xset", "domain": "in_domain", "protocol": {"compression": 32, "noise_trained": false, "backbone_fix": true}},
+    {"operator": "v2xvit",     "checkpoint": "v2x-vit",                        "dataset": "v2xset", "domain": "in_domain", "protocol": {"compression": 32, "noise_trained": true,  "backbone_fix": true}},
+    {"operator": "where2comm", "checkpoint": "point_pillar_where2comm_v2xset", "dataset": "opv2v",  "domain": "in_domain", "protocol": {"compression": 0,  "noise_trained": true,  "backbone_fix": false}}
+  ],
+  "faults": {
+    "pose_error":      {"severities": ["0.2m", "0.4m", "0.6m"],    "headline": "0.6m"},
+    "comm_latency":    {"severities": ["100ms", "200ms", "400ms"], "headline": "400ms"},
+    "bandwidth_limit": {"severities": ["0.5", "0.25", "0.1"],      "headline": "0.1"},
+    "fog":             {"severities": ["dense"],                   "headline": "dense"},
+    "snow":            {"severities": ["dense"],                   "headline": "dense"}
+  },
+  "agentdrop": {"strata": ["2", "3", "4", "5"], "headline": "4"},
+  "seeds": [20, 21, 22]
+}

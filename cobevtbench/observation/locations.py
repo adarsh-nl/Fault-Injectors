@@ -99,7 +99,7 @@ _ALL: List[Location] = [
          "reaches attention through here", "camera"),
     _loc("input/extrinsics", "CoBEVTCamera", "(B, L, M, 4, 4)",
          "T_cam_to_world; the other half of the lifting geometry", "camera"),
-    _loc("input/points", "CoBEVTLidar", "(P, T, 9)",
+    _loc("input/points", "CoBEVTLidar", "(P, T, 10)",
          "pillar features after voxelisation", "lidar"),
     _loc("input/agent_mask", "CoBEVTCamera | CoBEVTLidar", "(B, L)",
          "which agent slots hold a real agent; agent-drop faults land here"),

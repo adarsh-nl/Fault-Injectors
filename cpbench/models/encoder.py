@@ -5,7 +5,7 @@ PointPillars encoder (Lang et al. 2019), the local encoder E of CoRA.
 
 Three independent nn.Modules composed by `PointPillarEncoder`:
 
-    PillarVFE            (P, T, 9) decorated points -> (P, C_vfe) pillar feats
+    PillarVFE            (P, T, 10) decorated points -> (P, C_vfe) pillar feats
     PointPillarScatter   pillar feats + coords      -> (N, C_vfe, H0, W0)
     BEVBackbone          dense canvas               -> (N, C, H, W) = F_j
 
@@ -99,18 +99,18 @@ class PillarVFE(nn.Module):
     """Pillar feature encoder (single PFN layer, per the paper's backbone).
 
     Purpose  turn each pillar's decorated points into one feature vector.
-    Inputs   features (P, T, 9), num_points (P,) valid counts.
+    Inputs   features (P, T, 10), num_points (P,) valid counts.
     Output   (P, C_vfe) pillar features (max-pooled over valid points).
     Shapes   T = max points per pillar (padded rows are masked out).
 
     Example
     -------
-    >>> vfe = PillarVFE(in_channels=9, out_channels=64)
-    >>> vfe(torch.rand(10, 32, 9), torch.full((10,), 32)).shape
+    >>> vfe = PillarVFE(in_channels=10, out_channels=64)
+    >>> vfe(torch.rand(10, 32, 10), torch.full((10,), 32)).shape
     torch.Size([10, 64])
     """
 
-    def __init__(self, in_channels: int = 9, out_channels: int = 64) -> None:
+    def __init__(self, in_channels: int = 10, out_channels: int = 64) -> None:
         super().__init__()
         self.linear = nn.Linear(in_channels, out_channels, bias=False)
         self.norm = nn.BatchNorm1d(out_channels, eps=1e-3, momentum=0.01)
@@ -249,7 +249,7 @@ class PointPillarEncoder(nn.Module):
     ...         batch["num_points"], n_agents=4)           # doctest: +SKIP
     """
 
-    def __init__(self, grid_hw: Tuple[int, int], in_channels: int = 9,
+    def __init__(self, grid_hw: Tuple[int, int], in_channels: int = 10,
                  vfe_channels: int = 64,
                  block_channels: Sequence[int] = (64, 128, 256),
                  block_strides: Sequence[int] = (2, 2, 2),

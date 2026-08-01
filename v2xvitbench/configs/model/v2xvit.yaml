@@ -68,7 +68,11 @@ assumptions:
        metadata exists as batch fields, not mid-forward messages"
   A5: "velocity read from OPV2V-format ego_speed when present, else 0;
        synthetic scenes carry 0"
-  A6: "9-feature pillar decoration (repo convention), vs the reference's 10"
+  A6: "RETIRED 2026-08-01 -- pillar decoration is now 10 features, matching
+       OpenCOOD. This previously read '9-feature pillar decoration (repo
+       convention), vs the reference's 10', which recorded as a convention
+       what was actually a bug: cpbench omitted f_center's z component. No
+       divergence remains."
   A7: "STTF as a continuous differentiable affine warp; the reference
        discretises to whole feature cells"
   A8: "dropout 0.3 active in training only; evaluation always runs eval()"

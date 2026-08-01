@@ -150,7 +150,7 @@ def collate_cooperative(items: List[Dict[str, Any]]) -> Dict[str, Any]:
 
     Output keys
     -----------
-    features (ΣP, max_pts, 9) · coords (ΣP, 3)[agent, row, col] ·
+    features (ΣP, max_pts, 10) · coords (ΣP, 3)[agent, row, col] ·
     num_points (ΣP,) · agent_frame (Na,) · ego_mask (Na,) ·
     cls_target (B, H, W, A) · reg_target (B, H, W, A, 7) ·
     gt_boxes list[np.ndarray] · frames (B,) · agent_ids list[list[str]] ·
@@ -172,7 +172,7 @@ def collate_cooperative(items: List[Dict[str, Any]]) -> Dict[str, Any]:
             agent_counter += 1
 
     return {
-        "features": torch.cat(features) if features else torch.zeros(0, 1, 9),
+        "features": torch.cat(features) if features else torch.zeros(0, 1, 10),
         "coords": torch.cat(coords) if coords else torch.zeros(0, 3, dtype=torch.int64),
         "num_points": torch.cat(num_points) if num_points else torch.zeros(0, dtype=torch.int64),
         "agent_frame": torch.tensor(agent_frame, dtype=torch.int64),

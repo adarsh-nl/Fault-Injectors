@@ -254,7 +254,7 @@ against them (flip rate, SDC, fault-success via
 | A3 | RTE applied before the STTF warp (reference order). MSwin branch fusion configurable: split_attn (released) or naive mean. |
 | A4 | Metadata plane applied post-collate in the tester, not in-forward — V2X-ViT's corruptible metadata exists as batch fields. |
 | A5 | Velocity from OPV2V-format `ego_speed` when present, else 0 (synthetic → 0). Additive `AgentFrame.speed` field in `src`. |
-| A6 | 9-feature pillar decoration (repo convention) vs the reference's 10. |
+| A6 | **RETIRED 2026-08-01.** Was: "9-feature pillar decoration (repo convention) vs the reference's 10." It was not a convention, it was a bug — `cpbench` omitted `f_center`'s z component. Decoration is now 10 and matches OpenCOOD; no divergence remains. |
 | A7 | STTF as a continuous differentiable affine warp; the reference discretises to whole cells, discarding exactly the sub-cell misalignment a small pose error produces. |
 | A8 | Dropout 0.3 train-only; every measurement runs `eval()`. |
 | A9 | Ego is agent slot 0 in every sample (ego-first ordering; regroup truncates beyond max_cav keeping ego). |

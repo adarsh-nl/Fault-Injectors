@@ -18,7 +18,7 @@ The layout the OpenCOOD models expect
         ``voxel_coords`` as (N, 4) = [agent_index, z, y, x].
 
     This is NOT corabench's pillar layout ((P, 3) = [agent, row, col], with
-    9-channel decorated features). The two cannot be substituted for each
+    10-channel decorated features). The two cannot be substituted for each
     other, which is why ``AgentInputs.extra`` exists.
 
 Why this can be done in numpy

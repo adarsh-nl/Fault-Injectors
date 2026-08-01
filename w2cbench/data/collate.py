@@ -55,7 +55,7 @@ def collate_lidar(samples: Sequence[Dict[str, Any]],
 
     Outputs
     -------
-    ``features`` (P_total, T, 9), ``coords`` (P_total, 3) with a **global**
+    ``features`` (P_total, T, 10), ``coords`` (P_total, 3) with a **global**
     agent index, ``num_points`` (P_total,), ``record_len`` list of agents per
     sample, ``T_agent_to_ego`` (B, max_cav, 4, 4), ``gt_boxes`` list, plus
     the fault bookkeeping (``fault_records``, ``n_faults``) the benchmark
@@ -65,14 +65,14 @@ def collate_lidar(samples: Sequence[Dict[str, Any]],
     -------
     >>> import torch
     >>> def scene(n_agents, n_pillars):
-    ...     return {"features": torch.zeros(n_pillars, 4, 9),
+    ...     return {"features": torch.zeros(n_pillars, 4, 10),
     ...             "coords": torch.zeros(n_pillars, 3, dtype=torch.long),
     ...             "num_points": torch.zeros(n_pillars, dtype=torch.long),
     ...             "T_agent_to_ego": torch.eye(4).expand(n_agents, 4, 4),
     ...             "gt_boxes": None, "n_agents": n_agents, "frame": 0}
     >>> batch = collate_lidar([scene(2, 5), scene(1, 3)], max_cav=3)
     >>> batch["features"].shape, batch["record_len"]
-    (torch.Size([8, 4, 9]), [2, 1])
+    (torch.Size([8, 4, 10]), [2, 1])
     >>> batch["coords"][5:, 0].tolist()   # the second scene's agents offset by 2
     [2, 2, 2]
     >>> batch["T_agent_to_ego"].shape
@@ -96,7 +96,7 @@ def collate_lidar(samples: Sequence[Dict[str, Any]],
         offset += kept
 
     return {
-        "features": torch.cat(features) if features else torch.zeros(0, 0, 9),
+        "features": torch.cat(features) if features else torch.zeros(0, 0, 10),
         "coords": (torch.cat(coords) if coords
                    else torch.zeros(0, 3, dtype=torch.long)),
         "num_points": (torch.cat(num_points) if num_points

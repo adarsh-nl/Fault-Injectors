@@ -1,0 +1,60 @@
+# pytest run for the 9->10 pillar decoration fix (DL-006)
+# job      : 554294 on spark-head1
+# started  : 2026-08-01T09:36:17+02:00
+# scope    : cpbench v2xvitbench --doctest-modules
+# deferred : corabench lgcpbench cobevtbench w2cbench (pre-existing state, audit)
+# git HEAD : 654dab6  (uncommitted working tree)
+
+PYTEST_EXIT_CODE=1
+
+# --- summary line(s) as pytest printed them ---
+1 failed, 318 passed, 5 skipped, 3 warnings in 183.74s (0:03:03)
+
+# --- short test summary (failures only) ---
+=========================== short test summary info ============================
+FAILED cpbench/models/encoder.py::cpbench.models.encoder.PillarVFE
+1 failed, 318 passed, 5 skipped, 3 warnings in 183.74s (0:03:03)
+
+# --- last 40 lines of raw output ---
+    exec(compile(example.source, filename, "single",
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                 compileflags, True), test.globs)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<doctest cpbench.models.encoder.PillarVFE[1]>", line 1, in <module>
+  File "/home/nanjaiyalathaa/Fault-Injectors/.venv-hpc/lib/python3.13/site-packages/torch/nn/modules/module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/home/nanjaiyalathaa/Fault-Injectors/.venv-hpc/lib/python3.13/site-packages/torch/nn/modules/module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/home/nanjaiyalathaa/Fault-Injectors/cpbench/models/encoder.py", line 124, in forward
+    x = self.linear(features)                            # (P, T, C)
+  File "/home/nanjaiyalathaa/Fault-Injectors/.venv-hpc/lib/python3.13/site-packages/torch/nn/modules/module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/home/nanjaiyalathaa/Fault-Injectors/.venv-hpc/lib/python3.13/site-packages/torch/nn/modules/module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/home/nanjaiyalathaa/Fault-Injectors/.venv-hpc/lib/python3.13/site-packages/torch/nn/modules/linear.py", line 134, in forward
+    return F.linear(input, self.weight, self.bias)
+           ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: mat1 and mat2 shapes cannot be multiplied (320x9 and 10x64)
+/home/nanjaiyalathaa/Fault-Injectors/cpbench/models/encoder.py:109: UnexpectedException
+=============================== warnings summary ===============================
+cpbench/tests/test_segmentation.py::test_miou_excludes_background_by_default
+  /home/nanjaiyalathaa/Fault-Injectors/cpbench/metrics/segmentation.py:197: RuntimeWarning: Mean of empty slice
+    out["pixel_precision"] = float(np.nanmean(precision[reported]))
+
+cpbench/tests/test_segmentation.py::test_miou_excludes_background_by_default
+  /home/nanjaiyalathaa/Fault-Injectors/cpbench/metrics/segmentation.py:199: RuntimeWarning: Mean of empty slice
+    out["pixel_f1"] = float(np.nanmean(f1[reported]))
+
+v2xvitbench/tests/test_training.py::test_a_few_steps_reduce_the_loss_on_a_fixed_batch
+  /home/nanjaiyalathaa/Fault-Injectors/v2xvitbench/tests/test_training.py:103: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+  Consider using tensor.detach() first. (Triggered internally at /__w/pytorch/pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:822.)
+    first = float(terms["loss"]) if first is None else first
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED cpbench/models/encoder.py::cpbench.models.encoder.PillarVFE
+1 failed, 318 passed, 5 skipped, 3 warnings in 183.74s (0:03:03)
+
+# finished : 2026-08-01T09:41:50+02:00

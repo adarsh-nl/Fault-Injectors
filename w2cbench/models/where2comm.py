@@ -139,7 +139,7 @@ class Where2comm(nn.Module):
     ...     aggregator=AttenFusion(dim=32),
     ...     warp=SpatialTransform.from_grid_spec(spec),
     ...     graph=CommunicationGraph()).eval()
-    >>> batch = {"features": torch.randn(6, 4, 9),
+    >>> batch = {"features": torch.randn(6, 4, 10),
     ...          "coords": torch.tensor([[0, 1, 1], [0, 2, 2], [1, 3, 3],
     ...                                  [1, 4, 4], [1, 5, 5], [0, 6, 6]]),
     ...          "num_points": torch.full((6,), 4),

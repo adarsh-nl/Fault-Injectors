@@ -16,7 +16,7 @@ def test_item_structure(dataset, grid):
     assert item["reg_target"].shape == (h, w, a, 7)
     assert item["gt_boxes"].shape[1] == 7
     for pil in item["pillars"]:
-        assert pil["features"].shape[1:] == (16, 9)
+        assert pil["features"].shape[1:] == (16, 10)
 
 
 def test_collate_shapes(dataset):

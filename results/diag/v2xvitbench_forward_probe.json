@@ -1,0 +1,375 @@
+{
+  "pkg": "v2xvitbench",
+  "overrides": [
+    "dataset=v2xset",
+    "dataset.root=/local/554290/v2xset",
+    "dataset.scenarios=[\"2021_10_26_22_12_49\"]"
+  ],
+  "torch": "2.13.0+cu130",
+  "cuda_available": true,
+  "device_name": "NVIDIA L40",
+  "slurm_job": "554290",
+  "node": "hpc-node14",
+  "grid": {
+    "voxel_size": [
+      0.4,
+      0.4
+    ],
+    "point_range": [
+      -140.8,
+      -38.4,
+      -3.0,
+      140.8,
+      38.4,
+      1.0
+    ],
+    "downsample": 4,
+    "max_cav": 5,
+    "root": "/local/554290/v2xset",
+    "scenarios": [
+      "2021_10_26_22_12_49"
+    ]
+  },
+  "dataset": {
+    "class": "V2XVitLidarDataset",
+    "frames": 141
+  },
+  "sample_keys": [
+    "T_agent_to_ego",
+    "coords",
+    "fault_records",
+    "features",
+    "frame",
+    "gt_boxes",
+    "infra",
+    "n_agents",
+    "num_points",
+    "time_delay",
+    "velocity"
+  ],
+  "sample": {
+    "features": {
+      "shape": [
+        19480,
+        32,
+        10
+      ],
+      "dtype": "torch.float32",
+      "n_nan": 0,
+      "n_inf": 0,
+      "n_finite": 6233600,
+      "numel": 6233600,
+      "min": -119.480049,
+      "max": 119.692078,
+      "mean": -0.047894,
+      "std": 2.78353,
+      "frac_zero": 0.794549
+    },
+    "coords": {
+      "shape": [
+        19480,
+        3
+      ],
+      "dtype": "torch.int64",
+      "n_nan": 0,
+      "n_inf": 0,
+      "n_finite": 58440,
+      "numel": 58440,
+      "min": 0.0,
+      "max": 651.0,
+      "mean": 149.766388,
+      "std": 153.995758,
+      "frac_zero": 0.078029
+    },
+    "num_points": {
+      "shape": [
+        19480
+      ],
+      "dtype": "torch.int64",
+      "n_nan": 0,
+      "n_inf": 0,
+      "n_finite": 19480,
+      "numel": 19480,
+      "min": 1.0,
+      "max": 32.0,
+      "mean": 7.368891,
+      "std": 8.080817,
+      "frac_zero": 0.0
+    },
+    "T_agent_to_ego": {
+      "shape": [
+        5,
+        4,
+        4
+      ],
+      "dtype": "torch.float32",
+      "n_nan": 0,
+      "n_inf": 0,
+      "n_finite": 80,
+      "numel": 80,
+      "min": -46.583797,
+      "max": 77.543877,
+      "mean": 1.144659,
+      "std": 11.468987,
+      "frac_zero": 0.2125
+    },
+    "time_delay": {
+      "shape": [
+        5
+      ],
+      "dtype": "torch.int64",
+      "n_nan": 0,
+      "n_inf": 0,
+      "n_finite": 5,
+      "numel": 5,
+      "min": 0.0,
+      "max": 0.0,
+      "mean": 0.0,
+      "std": 0.0,
+      "frac_zero": 1.0
+    },
+    "infra": {
+      "shape": [
+        5
+      ],
+      "dtype": "torch.int64",
+      "n_nan": 0,
+      "n_inf": 0,
+      "n_finite": 5,
+      "numel": 5,
+      "min": 0.0,
+      "max": 1.0,
+      "mean": 0.2,
+      "std": 0.447214,
+      "frac_zero": 0.8
+    },
+    "velocity": {
+      "shape": [
+        5
+      ],
+      "dtype": "torch.float32",
+      "n_nan": 0,
+      "n_inf": 0,
+      "n_finite": 5,
+      "numel": 5,
+      "min": -0.063727,
+      "max": 20.776754,
+      "mean": 11.336944,
+      "std": 10.452796,
+      "frac_zero": 0.2
+    },
+    "gt_boxes": "array([[ 7.7063087e+01, -8.3393402e+00, -1.4401296e+00,  4.9016833e+00,\n         2.1283243e+00,  1.5107465e+00,  2.8593938e+00],\n       [ 3.3087234e+01, -1.3515547e+01, -1.3029201e+00,  4.9016833e+00,\n         2.1283243e+00,  1.5107465e+00,  1.5645403e+00],\n       [-4.6081516e+01, -3.1518111e+00, -1.0324543e+00,  4.9016833e+00,\n         2.1283243e+00,  1.5107465e+00,  1.2988816e-01],\n       [ 9.12",
+    "n_agents": "5"
+  },
+  "batch": {
+    "features": {
+      "shape": [
+        19480,
+        32,
+        10
+      ],
+      "dtype": "torch.float32",
+      "n_nan": 0,
+      "n_inf": 0,
+      "n_finite": 6233600,
+      "numel": 6233600,
+      "min": -119.480049,
+      "max": 119.692078,
+      "mean": -0.047894,
+      "std": 2.78353,
+      "frac_zero": 0.794549
+    },
+    "coords": {
+      "shape": [
+        19480,
+        3
+      ],
+      "dtype": "torch.int64",
+      "n_nan": 0,
+      "n_inf": 0,
+      "n_finite": 58440,
+      "numel": 58440,
+      "min": 0.0,
+      "max": 651.0,
+      "mean": 149.766388,
+      "std": 153.995758,
+      "frac_zero": 0.078029
+    },
+    "num_points": {
+      "shape": [
+        19480
+      ],
+      "dtype": "torch.int64",
+      "n_nan": 0,
+      "n_inf": 0,
+      "n_finite": 19480,
+      "numel": 19480,
+      "min": 1.0,
+      "max": 32.0,
+      "mean": 7.368891,
+      "std": 8.080817,
+      "frac_zero": 0.0
+    },
+    "T_agent_to_ego": {
+      "shape": [
+        1,
+        5,
+        4,
+        4
+      ],
+      "dtype": "torch.float32",
+      "n_nan": 0,
+      "n_inf": 0,
+      "n_finite": 80,
+      "numel": 80,
+      "min": -46.583797,
+      "max": 77.543877,
+      "mean": 1.144659,
+      "std": 11.468987,
+      "frac_zero": 0.2125
+    },
+    "time_delay": {
+      "shape": [
+        1,
+        5
+      ],
+      "dtype": "torch.int64",
+      "n_nan": 0,
+      "n_inf": 0,
+      "n_finite": 5,
+      "numel": 5,
+      "min": 0.0,
+      "max": 0.0,
+      "mean": 0.0,
+      "std": 0.0,
+      "frac_zero": 1.0
+    },
+    "infra": {
+      "shape": [
+        1,
+        5
+      ],
+      "dtype": "torch.int64",
+      "n_nan": 0,
+      "n_inf": 0,
+      "n_finite": 5,
+      "numel": 5,
+      "min": 0.0,
+      "max": 1.0,
+      "mean": 0.2,
+      "std": 0.447214,
+      "frac_zero": 0.8
+    },
+    "velocity": {
+      "shape": [
+        1,
+        5
+      ],
+      "dtype": "torch.float32",
+      "n_nan": 0,
+      "n_inf": 0,
+      "n_finite": 5,
+      "numel": 5,
+      "min": -0.063727,
+      "max": 20.776754,
+      "mean": 11.336944,
+      "std": 10.452796,
+      "frac_zero": 0.2
+    }
+  },
+  "batch_nontensor": {
+    "record_len": "[5]",
+    "gt_boxes": "[array([[ 7.7063087e+01, -8.3393402e+00, -1.4401296e+00,  4.9016833e+00,\n         2.1283243e+00,  1.5107465e+00,  2.8593938e+00],\n       [ 3.3087234e+01, -1.3515547e+01, -1.3029201e+00,  4.9016833e+00,\n         2.1283243e+00,  1.5107465e+00,  1.5645403e+00],\n       [-4.6081516e+01, -3.1518111e+00, -1.0324543e+00,  4.9016833e+00,\n         2.1283243e+00,  1.5107465e+00,  1.2988816e-01],\n       [ 9.1",
+    "frame": "[0]",
+    "fault_records": "[]",
+    "n_faults": "0"
+  },
+  "model": {
+    "class": "V2XViT",
+    "n_params": 12432676,
+    "n_tensors": 281
+  },
+  "output": {
+    "cls": {
+      "shape": [
+        1,
+        2,
+        48,
+        176
+      ],
+      "dtype": "torch.float32",
+      "n_nan": 0,
+      "n_inf": 0,
+      "n_finite": 16896,
+      "numel": 16896,
+      "min": -4.989254,
+      "max": -4.464271,
+      "mean": -4.725214,
+      "std": 0.255705,
+      "frac_zero": 0.0
+    },
+    "reg": {
+      "shape": [
+        1,
+        14,
+        48,
+        176
+      ],
+      "dtype": "torch.float32",
+      "n_nan": 0,
+      "n_inf": 0,
+      "n_finite": 118272,
+      "numel": 118272,
+      "min": -0.366253,
+      "max": 0.454168,
+      "mean": 0.025407,
+      "std": 0.186,
+      "frac_zero": 0.0
+    },
+    "fused": {
+      "shape": [
+        1,
+        256,
+        48,
+        176
+      ],
+      "dtype": "torch.float32",
+      "n_nan": 0,
+      "n_inf": 0,
+      "n_finite": 2162688,
+      "numel": 2162688,
+      "min": -1.628462,
+      "max": 1.401038,
+      "mean": 0.031483,
+      "std": 0.54399,
+      "frac_zero": 0.0
+    },
+    "agent_mask": {
+      "shape": [
+        1,
+        5,
+        48,
+        176
+      ],
+      "dtype": "torch.bool",
+      "n_nan": 0,
+      "n_inf": 0,
+      "n_finite": 42240,
+      "numel": 42240,
+      "min": 0.0,
+      "max": 1.0,
+      "mean": 0.622538,
+      "std": 0.484758,
+      "frac_zero": 0.377462
+    }
+  },
+  "output_nontensor": {},
+  "checks": {
+    "output_all_finite": true,
+    "output_nonfinite_keys": [],
+    "agent_mask_frac_on": 0.622538,
+    "agent_mask_degenerate": false,
+    "cls_not_constant": true
+  },
+  "status": "OK"
+}

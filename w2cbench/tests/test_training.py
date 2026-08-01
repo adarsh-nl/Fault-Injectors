@@ -60,7 +60,7 @@ def _loss() -> MultiRoundDetectionLoss:
 
 
 def _scene(n_agents: int, n_pillars: int) -> dict:
-    return {"features": torch.zeros(n_pillars, 4, 9),
+    return {"features": torch.zeros(n_pillars, 4, 10),
             "coords": torch.zeros(n_pillars, 3, dtype=torch.long),
             "num_points": torch.zeros(n_pillars, dtype=torch.long),
             "T_agent_to_ego": torch.eye(4).expand(n_agents, 4, 4).contiguous(),

@@ -122,7 +122,7 @@ def agents(spec: GridSpec, cav_positions: np.ndarray,
         axis=1,
     )
     return AgentInputs(
-        features=torch.from_numpy(rng.normal(size=(n_pillars, 32, 9))).float(),
+        features=torch.from_numpy(rng.normal(size=(n_pillars, 32, 10))).float(),
         coords=torch.from_numpy(coords).long(),
         num_points=torch.from_numpy(rng.integers(1, 32, size=n_pillars)).long(),
         n_agents=n_agents,

@@ -46,7 +46,7 @@ def _batch(n_agents: int = 3) -> dict:
         torch.arange(12) % 16,
         torch.arange(12) % 16], dim=1)
     return {
-        "features": torch.randn(12, 4, 9, generator=generator),
+        "features": torch.randn(12, 4, 10, generator=generator),
         "coords": coords,
         "num_points": torch.full((12,), 4),
         "record_len": [n_agents],

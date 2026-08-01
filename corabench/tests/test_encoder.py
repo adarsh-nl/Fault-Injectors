@@ -7,7 +7,7 @@ from cpbench.models.encoder import (BEVBackbone, PillarVFE,
 
 
 def test_vfe_shapes_and_masking():
-    vfe = PillarVFE(9, 16)
+    vfe = PillarVFE(10, 16)
     feats = torch.rand(5, 8, 9)
     out = vfe(feats, torch.tensor([8, 4, 1, 8, 0]))
     assert out.shape == (5, 16)

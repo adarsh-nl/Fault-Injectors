@@ -184,7 +184,7 @@ class NativeReferenceBackbone(nn.Module):
         channels: int = 256,
         num_anchors: int = 2,
         num_classes: int = 1,
-        in_channels: int = 9,
+        in_channels: int = 10,
         downsample: int = 4,
         use_projections: bool = True,
     ) -> None:
