@@ -259,9 +259,69 @@ against them (flip rate, SDC, fault-success via
 | A8 | Dropout 0.3 train-only; every measurement runs `eval()`. |
 | A9 | Ego is agent slot 0 in every sample (ego-first ordering; regroup truncates beyond max_cav keeping ego). |
 | A10 | Metadata faults are evaluation-only; a benchmarked model was never fitted to its own fault distribution. |
+| A11 | **V2XSet eval range is y ±38.4, not the oracle's y ±40.** Deliberate, unresolved, and it affects grading. See §7.1. |
 
-All ten are carried in `configs/model/v2xvit.yaml` and written to
-`meta.json` on every run.
+A1–A10 are carried in `configs/model/v2xvit.yaml` and written to `meta.json`
+on every run. **A11 is not** — it is a property of the dataset grid, not of the
+model config, so it must be restated wherever a V2XSet AP is reported.
+
+### 7.1 V2XSet eval-range deviation (M3)
+
+Recorded 2026-08-01, before the first from-scratch training run. **This is a
+note, not a fix.** Nothing in the code was changed to address it, deliberately:
+the anchor range and the grid define the architecture's geometry, and altering
+them would invalidate the run this note was written alongside.
+
+**1. The oracle's evaluation range is y ±40.**
+OpenCOOD sets `cav_lidar_range: [-140.8, -40, -3, 140.8, 40, 1]` for V2XSet,
+and the V2X-ViT paper — together with the OpenCOOD-based works that report
+against it — states the evaluation range as x ∈ [-140.8, 140.8], y ∈ [-40, 40],
+with a **fixed ego** at test time. That is the protocol that produced the
+published clean **AP@0.7 = 0.712 / AP@0.5 = 0.882** (Perfect setting) this
+repository grades against.
+
+**2. This repository crops to y ±38.4.**
+`configs/dataset/v2xset.yaml` sets
+`point_range: [-140.8, -38.4, -3.0, 140.8, 38.4, 1.0]`, and
+`data/dataset.py` passes that same `grid.point_range` into
+`cooperative_gt_boxes(...)`, which drops any GT box whose **centre** falls
+outside the x/y bounds. So the anchors and the grading key share one range, and
+that range is y ±38.4.
+
+The 38.4 is not arbitrary and not a typo. `2 × 38.4 / 0.4 = 192` pillar rows →
+**48** fused cells after the stride-4 fusion grid, and 48 is divisible by every
+MSwin window size (4, 8, 16). At y ±40 the fused height is 50, which 4, 8 and
+16 do not tile. The grid was chosen to make the attention geometry exact.
+
+**3. Consequence — it cuts both ways, and neither direction is free.**
+GT boxes in the |y| ∈ [38.4, 40] band lie outside anchor coverage entirely: no
+anchor is ever generated there, so the model *cannot* emit a detection for
+them, at any score threshold.
+
+- Grading on **y ±40** counts that band as structural false negatives. AP is
+  understated by an amount set by how many vehicles occupy a 1.6 m strip at
+  each edge of the range — small, but not zero, and not an architectural
+  property of V2X-ViT.
+- Grading on **y ±38.4** is self-consistent but **not directly comparable to
+  0.712**, because it silently removes objects the oracle protocol counted.
+
+Reporting a ±38.4 number *as if* it were comparable to 0.712 is the failure
+mode this note exists to prevent.
+
+**4. Decision, to be finalised at the eval step — not now.** Two options:
+
+- **(preferred) Grade on y ±40 and state the anchor-coverage caveat
+  explicitly** next to the number, quantifying how many GT boxes fall in the
+  uncovered band so the reader can size the effect. Precedent: the V2XSet
+  `validate` split deficit (6 scenarios) is carried as a stated limitation
+  rather than silently worked around — see `docs/repository_audit.md` F-09.
+- Reconcile the grid to y ±40 in a **later, separate change**, accepting a
+  50-cell fused height and whatever MSwin padding or window-size change that
+  forces. This is an architecture change and would require retraining from
+  scratch; it must not be bundled with an eval fix.
+
+Until that decision is made, **any V2XSet AP produced by this repository is a
+±38.4 number** and must be labelled as such.
 
 ## 8. Configuration schema
 

@@ -66,7 +66,7 @@ def test_the_declared_resolution_is_what_the_backbone_produces(
     encoder = PointPillarEncoder(spec.grid_hw, block_strides=strides,
                                  out_channels=16).eval()
     with torch.no_grad():
-        out = encoder(torch.randn(4, 8, 9),
+        out = encoder(torch.randn(4, 8, 10),
                       torch.tensor([[0, 1, 1], [0, 2, 2], [1, 3, 3], [1, 4, 4]]),
                       torch.full((4,), 8), n_agents=2)
     assert tuple(out.shape[-2:]) == spec.feature_hw
@@ -79,7 +79,7 @@ def test_the_mismatch_this_guards_really_does_produce_a_wrong_grid() -> None:
     encoder = PointPillarEncoder(spec.grid_hw, block_strides=(2, 2, 2),
                                  out_channels=16).eval()
     with torch.no_grad():
-        out = encoder(torch.randn(2, 8, 9),
+        out = encoder(torch.randn(2, 8, 10),
                       torch.tensor([[0, 1, 1], [1, 2, 2]]),
                       torch.full((2,), 8), n_agents=2)
     assert tuple(out.shape[-2:]) != spec.feature_hw       # silently different

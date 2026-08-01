@@ -13,7 +13,10 @@ grad_clip: 35.0
 amp: false          # off by default: HMSA masks with finfo.min, which is
                     # dtype-dependent, and attention statistics compared
                     # across runs should not vary with the AMP setting.
-num_workers: 0
+num_workers: 8         # data prep is the bottleneck, not the GPU: 1.00 ->
+                       # 0.47 s/step on staged V2XSet (job 554487). Workers
+                       # are seeded per-id in scripts/train.py; without that
+                       # seeding they would all share the parent's RNG.
 log_every: 20
 eval_every: 5
 checkpoint_every: 10
