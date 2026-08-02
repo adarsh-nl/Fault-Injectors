@@ -71,12 +71,61 @@ def x_to_world(pose6):
     return T
 
 
+if yaml is not None:
+    class _TolerantLoader(yaml.SafeLoader):
+        """SafeLoader that skips embedded Python/numpy pickles.
+
+        Some OPV2V/V2XSet label files serialise CARLA's planner output with
+        ``yaml.dump(..., default_flow_style=False)`` on raw numpy scalars,
+        which emits tags like::
+
+            plan_trajectory:
+            - - 105.15015411376953
+              - !!python/object/apply:numpy.core.multiarray.scalar
+
+        ``yaml.safe_load`` refuses those tags by design and raises
+        ``ConstructorError``, which is what killed training job 554552 four
+        scenarios into the V2XSet train split. The tag appears in 246 train,
+        14 validate and 248 test label files -- 11 of 33 train scenarios and
+        8 of 19 test scenarios -- so skipping the affected scenarios is not
+        an option: it would remove a third of the training data and 42% of
+        the test set, and any AP computed on the remainder would not be
+        comparable to the published number.
+
+        Every occurrence measured is under ``plan_trajectory``, a CARLA
+        planner field this adapter never reads -- it consumes ``lidar_pose``,
+        ``ego_speed``, ``camera{i}`` and ``vehicles`` only. So the parser is
+        choking on data the pipeline discards, and mapping those tags to
+        ``None`` loses nothing that is used.
+
+        Why not ``yaml.UnsafeLoader``
+            It would execute pickles out of data files, and it would fail
+            anyway: the tag names ``numpy.core``, which numpy 2.0 renamed to
+            ``numpy._core``, and this project runs numpy 2.5. Skipping the
+            tag avoids both the code execution and the version coupling --
+            no pickle runs and numpy is never imported to parse a label.
+
+        The mapping is deliberately narrow: only ``!!python/...`` tags are
+        neutralised. A malformed *plain* YAML value still raises, so genuine
+        corruption is not silently swallowed.
+        """
+
+    for _tag in ('tag:yaml.org,2002:python/object/apply:',
+                 'tag:yaml.org,2002:python/object/new:',
+                 'tag:yaml.org,2002:python/name:',
+                 'tag:yaml.org,2002:python/tuple'):
+        _TolerantLoader.add_multi_constructor(
+            _tag, lambda loader, suffix, node: None)
+else:                                            # pragma: no cover
+    _TolerantLoader = None
+
+
 def _load_yaml(path):
     if yaml is None:
         raise ImportError('pyyaml is required for the OPV2V/V2XSet adapter '
                           '(pip install pyyaml)')
     with open(path) as f:
-        return yaml.safe_load(f)
+        return yaml.load(f, Loader=_TolerantLoader)
 
 
 class OPV2VDataset(BaseDataset):

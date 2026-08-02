@@ -1,5 +1,7 @@
 """Adapter tests against tiny synthetic on-disk trees."""
 
+from pathlib import Path
+
 import numpy as np
 import pytest
 
@@ -144,3 +146,75 @@ def test_registry():
         available_datasets())
     with pytest.raises(ValueError, match='unknown dataset'):
         load_dataset('kitti-nope', '/tmp')
+
+
+# ── embedded-pickle label files (regression for job 554552) ─────────────────
+
+_V2XSET = Path("/datasets/eemcs/ps/cv/opencood/v2xset")
+# One label file known to carry `!!python/object/apply:numpy.core...` under
+# plan_trajectory. 246 train / 14 validate / 248 test files are affected.
+_PICKLED_LABEL = _V2XSET / "train/2021_08_23_23_08_17/565/000085.yaml"
+
+
+@pytest.mark.skipif(not _PICKLED_LABEL.is_file(),
+                    reason="needs the staged V2XSet tree on this cluster")
+def test_label_with_embedded_pickle_keeps_every_field_the_adapter_uses():
+    """The tolerant loader must skip the pickle WITHOUT nulling real fields.
+
+    `yaml.safe_load` raises ConstructorError on these files, which killed
+    training job 554552. The fix maps `!!python/...` tags to None -- and the
+    risk it introduces is the opposite failure: parsing "successfully" while
+    silently blanking a field the model needs, so training proceeds on
+    corrupted labels and nothing ever raises.
+
+    So this asserts the four keys `_load_agent` actually consumes are present,
+    non-None and structurally intact -- not merely that the file parses.
+    """
+    from ..datasets.opv2v import _load_yaml
+
+    params = _load_yaml(_PICKLED_LABEL)
+
+    # the pickle is confined to a field the adapter never reads
+    assert "plan_trajectory" in params
+
+    # lidar_pose -> x_to_world(): 6 real numbers, and not all zero
+    pose = params["lidar_pose"]
+    assert isinstance(pose, list) and len(pose) == 6
+    assert all(isinstance(v, (int, float)) for v in pose)
+    assert any(v != 0 for v in pose)
+
+    # ego_speed -> AgentFrame.speed
+    assert isinstance(params["ego_speed"], (int, float))
+
+    # vehicles -> the ground-truth boxes; the labels themselves
+    vehicles = params["vehicles"]
+    assert isinstance(vehicles, dict) and len(vehicles) > 0
+    for vid, v in vehicles.items():
+        assert isinstance(v["location"], list) and len(v["location"]) == 3
+        assert isinstance(v["extent"], list) and len(v["extent"]) == 3
+        assert isinstance(v["angle"], list) and len(v["angle"]) == 3
+        assert all(x is not None for x in v["location"] + v["extent"] + v["angle"])
+
+    # camera calibration survives when present
+    if "camera0" in params:
+        assert params["camera0"] is not None
+
+
+@pytest.mark.skipif(not _PICKLED_LABEL.is_file(),
+                    reason="needs the staged V2XSet tree on this cluster")
+def test_pickled_label_scenario_loads_end_to_end():
+    """The adapter itself -- not just the parser -- handles the scenario."""
+    ds = OPV2VDataset(str(_PICKLED_LABEL.parent.parent))
+    sample = ds.get_sample(0, load=("labels",))
+    assert sample.ego.pose is not None
+    assert sample.ego.pose.shape == (4, 4)
+    assert len(sample.agents) >= 1
+
+
+def test_tolerant_loader_still_rejects_genuinely_broken_yaml(tmp_path):
+    """Skipping python tags must not turn into swallowing real corruption."""
+    from ..datasets.opv2v import _load_yaml
+    bad = tmp_path / "broken.yaml"
+    bad.write_text("vehicles: {unclosed: [1, 2\n")
+    with pytest.raises(Exception):
+        _load_yaml(bad)
