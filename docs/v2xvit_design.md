@@ -323,6 +323,56 @@ mode this note exists to prevent.
 Until that decision is made, **any V2XSet AP produced by this repository is a
 ±38.4 number** and must be labelled as such.
 
+### 7.2 The ignore band — retired from the baselines, kept as a research note
+
+Recorded 2026-08-03, when `cpbench.training.DetectionLoss` was changed to match
+OpenCOOD's classification loss exactly.
+
+**What changed.** The shared loss previously excluded "ignore" anchors — those
+whose best IoU falls between `neg_threshold` and `pos_threshold`, marked `-1`
+by `TargetAssigner` — from the classification term. OpenCOOD does not have that
+state. Its `pos_equal_one` is binary, and
+
+```python
+positives = box_cls_labels > 0     # point_pillar_loss.py:100
+negatives = box_cls_labels == 0    # point_pillar_loss.py:101
+```
+
+partition every anchor, so ambiguous anchors **are** scored as background. Our
+loss now does the same, and `test_ignored_anchors_contribute_nothing` was
+retired because it asserted the pre-fix contract.
+
+**The retired rationale, preserved because it is not wrong.** That test's
+docstring argued: *"-1 marks 'too ambiguous to score'. Training on it would
+teach the model that near-misses are background."* That is a real cost, not a
+bookkeeping detail. An anchor at IoU 0.5 against a genuine vehicle is
+substantially overlapping it; supervising it toward background pushes the
+classifier to suppress exactly the half-overlapping proposals that a
+localisation-tolerant detector needs, and it inflates the effective
+negative:positive ratio that focal loss is already fighting. Two-stage
+detectors and SECOND-lineage anchor assigners commonly carve out this band for
+precisely that reason.
+
+**Why we adopt OpenCOOD's choice anyway.** These four packages are
+*baselines*, graded against published numbers. A baseline that improves on the
+reference is not a baseline — a discrepancy against 0.712 would then be
+unattributable, because it could be our fix rather than our error. Fidelity
+beats defensibility here, and the ignore band is a deviation we can no longer
+justify carrying silently.
+
+**Candidate for OUR architecture, not for the baselines.** Reinstating the
+ignore band is a legitimate design choice for the fault-benchmark's own model
+(CoRA, or any successor), where we are not bound to reproduce anyone's table.
+If it is ever adopted there:
+
+- it must be a per-package setting, never a change to the shared
+  `cpbench` loss, or it silently un-baselines all four reference packages;
+- it must be ablated against the binary contract on the same data, so the
+  effect is measured rather than assumed;
+- the natural place to test the claim is fault robustness, not clean AP —
+  the argument is about near-miss anchors, and pose error is precisely what
+  turns clean hits into near misses.
+
 ## 8. Configuration schema
 
 Plain-YAML group composition via `cpbench.utils.load_config` (no Hydra):

@@ -107,38 +107,58 @@ class DetectionLoss(nn.Module):
 
         cls_pred = cls_map.reshape(batch, n_anchors, self.num_classes,
                                    height, width)
-        cls_pred = cls_pred.permute(0, 3, 4, 1, 2).reshape(-1, self.num_classes)
-        labels = cls_target.reshape(-1)
+        cls_pred = cls_pred.permute(0, 3, 4, 1, 2).reshape(
+            batch, -1, self.num_classes)                       # (B, A, C)
+        labels = cls_target.reshape(batch, -1)                 # (B, A)
 
-        valid = labels >= 0                       # -1 = ignore
+        # -- anchor selection and normalisation, matching OpenCOOD ----------
+        # opencood/loss/point_pillar_loss.py:100-108,124,137.
+        #
+        # (b) NO IGNORE BAND. The reference's `pos_equal_one` is binary, so
+        #     `positives = labels > 0` / `negatives = labels == 0` (:100-101)
+        #     partition every anchor -- there is no third state and nothing is
+        #     masked out. Our TargetAssigner marks IoU-band anchors -1; to
+        #     reproduce the reference's anchor selection they must count as
+        #     NEGATIVES, not be dropped. This previously used `labels >= 0` to
+        #     exclude them, which trained on a strictly smaller anchor set than
+        #     the code that produced the published numbers.
+        #
+        # (a) PER-SAMPLE NORMALISATION, THEN BATCH MEAN. The reference divides
+        #     each anchor's weight by that SAMPLE's positive count
+        #     (`pos_normalizer = positives.sum(1, keepdim=True)`, :106, clamped
+        #     at 1.0, :107-108) and then divides the total by the batch size
+        #     (:124, :137). We previously summed over the whole batch and
+        #     divided by the batch-global positive count, which lets a
+        #     positive-rich sample shrink a positive-poor one's contribution.
         positive = labels > 0
-        n_positive = int(positive.sum())
+        negative = ~positive                       # ref :101 over binary labels
+        cls_weights = positive.to(cls_pred.dtype) + negative.to(cls_pred.dtype)
+        reg_weights = positive.to(cls_pred.dtype)
+        pos_normalizer = positive.sum(1, keepdim=True).to(cls_pred.dtype)
+        cls_weights = cls_weights / pos_normalizer.clamp(min=1.0)
+        reg_weights = reg_weights / pos_normalizer.clamp(min=1.0)
 
         one_hot = torch.zeros_like(cls_pred)
         if self.num_classes == 1:
-            one_hot[:, 0] = (labels > 0).to(cls_pred.dtype)
+            one_hot[..., 0] = positive.to(cls_pred.dtype)
         else:
             index = labels.clamp(min=0).long()
-            one_hot.scatter_(1, index.unsqueeze(1), 1.0)
+            one_hot.scatter_(-1, index.unsqueeze(-1), 1.0)
             one_hot[labels <= 0] = 0.0
 
         focal = sigmoid_focal_loss(cls_pred, one_hot, self.alpha, self.gamma)
-        # Normalise by positives, not by anchor count: the latter makes the
-        # loss scale with grid size, so changing the BEV resolution silently
-        # rescales the learning rate.
-        loss_cls = focal[valid].sum() / max(n_positive, 1)
+        loss_cls = (focal * cls_weights.unsqueeze(-1)).sum() / batch
 
         reg_pred = reg_map.reshape(batch, n_anchors, self.reg_dim,
                                    height, width)
-        reg_pred = reg_pred.permute(0, 3, 4, 1, 2).reshape(-1, self.reg_dim)
-        reg_true = reg_target.reshape(-1, self.reg_dim)
-        if n_positive:
-            loss_reg = F.smooth_l1_loss(reg_pred[positive], reg_true[positive],
-                                        reduction="sum") / n_positive
-        else:
-            # Keeps the graph connected on an empty frame; a bare zero would
-            # detach the head and silently skip its gradient for that step.
-            loss_reg = reg_pred.sum() * 0.0
+        reg_pred = reg_pred.permute(0, 3, 4, 1, 2).reshape(
+            batch, -1, self.reg_dim)
+        reg_true = reg_target.reshape(batch, -1, self.reg_dim)
+        # reduction="none" then weight: an empty frame contributes 0 through a
+        # live graph edge, so the old `reg_pred.sum() * 0.0` special case for
+        # zero positives is no longer needed -- reg_weights is simply all-zero.
+        elementwise = F.smooth_l1_loss(reg_pred, reg_true, reduction="none")
+        loss_reg = (elementwise * reg_weights.unsqueeze(-1)).sum() / batch
 
         total = loss_cls + self.reg_weight * loss_reg
         return {"loss": total, "loss_cls": loss_cls.detach(),
