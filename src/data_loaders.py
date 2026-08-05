@@ -9,8 +9,16 @@ import glob
 import json
 import numpy as np
 from PIL import Image
-from plyfile import PlyData
 from scipy.spatial.transform import Rotation as Rot
+
+# `plyfile` is imported lazily inside `load_lidar_ply` (the only place it is
+# used). It is a Griffin-only dependency: OPV2V/V2XSet ship `.pcd`, DAIR-V2X
+# ships `.pcd`/`.bin`, and neither path touches PLY. A module-level import
+# made `import src.datasets` -- and therefore every fault injector run that
+# goes through the common sample model -- fail on any environment without it,
+# including `opencood-official`, the env the verified baselines were produced
+# in. Same convention as the lazy `torchvision` import: an optional backend
+# degrades where it is used, it does not break the package.
 
 
 # ── File list helpers ──────────────────────────────────────────────────────
@@ -80,6 +88,8 @@ def load_lidar(ply_path, apply_mount=True):
     np.ndarray (N, 4)  float32 — columns: x, y, z, intensity (EGO frame
                         when apply_mount=True, sensor frame otherwise)
     """
+    from plyfile import PlyData          # lazy: Griffin-only, see module head
+
     ply = PlyData.read(ply_path)
     v   = ply['vertex']
     x   = np.array(v['x'], dtype=np.float32)
