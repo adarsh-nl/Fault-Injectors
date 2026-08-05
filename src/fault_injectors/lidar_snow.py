@@ -153,6 +153,25 @@ class LidarSnowInjector:
         self.last_num_far_passthrough = None
 
     def __call__(self, points):
+        """Run the simulation with the GLOBAL numpy RNG contained.
+
+        The verbatim MultiCorrupt code draws its channel shuffle and RANSAC
+        noise fit from the global ``np.random`` stream, so determinism needs
+        ``np.random.seed``. Left uncontained, that reseed also rewinds the
+        caller's global stream -- the exact defect PointsReductionInjector is
+        blocked on, and fatal in the OpenCOOD wrapper where ``shuffle_points``
+        (and thus per-pillar truncation, and thus AP) draws from that same
+        stream. Save/restore brackets the simulation: output is bit-identical
+        (the sim consumes the same seeded stream), and the caller's stream
+        continues exactly where it left off.
+        """
+        state = np.random.get_state()
+        try:
+            return self._run(points)
+        finally:
+            np.random.set_state(state)
+
+    def _run(self, points):
         pts = np.asarray(points, dtype=np.float64)
         if pts.ndim != 2 or pts.shape[1] < 4:
             raise ValueError(f"expected (N,>=4) [x,y,z,intensity], got {pts.shape}")

@@ -23,6 +23,17 @@ def load_pcd(path, columns=('x', 'y', 'z', 'intensity')):
 
     Requested columns absent from the file are filled with zeros (some
     exports omit intensity). Extra columns in the file are ignored.
+
+    Intensity aliasing: OPV2V/V2XSet .pcd files carry no field literally
+    named ``intensity`` -- their header is ``FIELDS x y z rgb``, with the
+    return intensity stored in the RED byte of a bit-packed PCL rgb float
+    (open3d exposes it as ``colors[:, 0]``, which is exactly what OpenCOOD's
+    ``pcd_utils.pcd_to_np`` reads). Before 2026-08-05 this function matched
+    field names literally, found no ``intensity``, and silently zero-filled
+    the column -- which is why LidarFog/LidarSnow appeared to no-op on these
+    clouds. A requested ``intensity`` column now falls back to an ``I``/``i``
+    field (Griffin-style) and then to unpacking ``rgb``; the unpack is
+    bit-identical to ``pcd_to_np`` (verified max|d| = 0.0 on V2XSet).
     """
     with open(path, 'rb') as f:
         header = {}
@@ -73,4 +84,15 @@ def load_pcd(path, columns=('x', 'y', 'z', 'intensity')):
     for j, col in enumerate(columns):
         if col in names:
             out[:, j] = rec[col].astype(np.float32)
+        elif col == 'intensity':
+            alias = next((a for a in ('I', 'i') if a in names), None)
+            if alias is not None:
+                out[:, j] = rec[alias].astype(np.float32)
+            elif 'rgb' in names:
+                # PCL packed-rgb float: red byte = bits 16-23. The cast to
+                # float32 first is exact (the packed value was written as
+                # float32), so the bit view recovers the original bytes.
+                bits = np.ascontiguousarray(
+                    rec['rgb'].astype(np.float32)).view(np.uint32)
+                out[:, j] = ((bits >> 16) & 0xFF).astype(np.float32) / 255.0
     return out
