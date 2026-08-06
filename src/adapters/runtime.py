@@ -188,24 +188,24 @@ def make_faulty_dataset(base_cls, spec, adapter=None):
 
         def time_delay_calculation(self, ego_flag):
             """
-            UNEXERCISED in the PoseError PoC (``spec.latency`` is None, so this
-            delegates straight to OpenCOOD). Wired but not yet validated; it
-            gets its own PoC when CommLatency lands.
-
             ``time_delay_calculation(self, ego_flag)`` carries neither ``idx``
             nor ``cav_id``, so the delay map is built up front in
             ``retrieve_base_data`` (which we override anyway) and consumed here
-            in the same ``scenario_database.items()`` order the caller loops in.
-            No mutable per-call state, no ordering guesswork.
+            in the same ``scenario_database.items()`` order the caller loops
+            in. One entry per cav INCLUDING the ego, popped unconditionally --
+            an early return for the ego would leave its entry in the queue and
+            hand the ego's 0 to the first cav (the exact bug the first
+            fire-check of this hook caught, 2026-08-05).
             """
             if spec.latency is None or self._fi_delays is None:
                 return super(FaultyDataset, self).time_delay_calculation(ego_flag)
-            if ego_flag:
-                return 0
             if not self._fi_delays:
                 raise AssertionError('delay map exhausted: the cav loop ran '
                                      'more times than the map was built for')
-            return self._fi_delays.pop(0)
+            delay = self._fi_delays.pop(0)
+            if ego_flag and delay != 0:
+                raise AssertionError('ego delay must be 0, map is misaligned')
+            return delay
 
         def _fi_build_delay_map(self, idx):
             from ..fault_injectors.communication import CommLatencyInjector
@@ -223,12 +223,21 @@ def make_faulty_dataset(base_cls, spec, adapter=None):
                 if content['ego']:
                     delays.append(0)
                     continue
-                inj = CommLatencyInjector(
-                    seed=_seed(spec.seed, idx, cav_id, 'latency'),
-                    **spec.latency)
-                # frames -> OpenCOOD's 100 ms units; identity at 10 Hz.
-                shift = ts_index - inj.stale_index(str(cav_id), ts_index)
-                delays.append(int(max(0, shift)))
+                s = _seed(spec.seed, idx, cav_id, 'latency')
+                inj = CommLatencyInjector(seed=s, **spec.latency)
+                # stale_index returns (k_stale, delta_frames); frames ==
+                # OpenCOOD's 100 ms units at the 10 Hz of OPV2V/V2XSet.
+                # basedataset additionally clamps against timestamp_index,
+                # so a scene-start frame cannot borrow from before the scene.
+                k_stale, delta = inj.stale_index(str(cav_id), ts_index)
+                delay = int(max(0, ts_index - k_stale))
+                delays.append(delay)
+                if delay > 0:
+                    self._fi_log.write(
+                        idx=idx, agent_id=str(cav_id), is_ego=0,
+                        stage='latency', seed=s,
+                        detail='delay_frames=%d;drawn=%d;ts_index=%d'
+                               % (delay, delta, ts_index))
             self._fi_delays = delays
 
         # ── hook 2: post-assembly sample faults ─────────────────────────
