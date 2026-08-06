@@ -68,3 +68,10 @@ cora-nan-diag/
 !/results/record_result.py
 !/results/render_table.py
 !/results/README.md
+
+# admit the fault visualisation assets the README references (PNG contact
+# sheets and small GIFs); keep the heavy MP4 animations and NPZ data ignored
+!/results/fault_injector_visualisation/
+!/results/fault_injector_visualisation/**
+/results/fault_injector_visualisation/**/*.mp4
+/results/fault_injector_visualisation/**/*.npz
