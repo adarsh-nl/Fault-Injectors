@@ -53,3 +53,18 @@ CLAUDE.md
 nan-diag-*.out
 nan-diag-*.err
 cora-nan-diag/
+
+# results/ scaffold (must stay after the results/ rules on lines 31 and 46).
+# Those are directory patterns, so git never descends into results/ and a bare
+# negation of a file inside it would not fire. Re-include the directory, then
+# re-exclude its contents, then re-include exactly the four scaffold files:
+# the eval protocol spec and the scripts that write and render cells.
+# Everything they generate -- cells/*.json, RESULTS.md, run bundles -- stays
+# ignored. Every pattern here is anchored with a leading / so it applies only
+# to the root results/; a nested results/ dir stays ignored by lines 31/46.
+!/results/
+/results/*
+!/results/table_spec.json
+!/results/record_result.py
+!/results/render_table.py
+!/results/README.md
