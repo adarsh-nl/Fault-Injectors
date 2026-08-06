@@ -1,9 +1,5 @@
-"""CoRA's model.
-
-The generic PointPillars encoder and detection heads are paper-agnostic and
-live in ``cpbench.models``.
-"""
-
 from .cora import CoRAModel
+from .fusion_head import AdaptiveFusion
+from .pac import PACModule, SinusoidalPE
 
-__all__ = ["CoRAModel"]
+__all__ = ["CoRAModel", "AdaptiveFusion", "PACModule", "SinusoidalPE"]

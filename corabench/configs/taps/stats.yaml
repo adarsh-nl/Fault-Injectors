@@ -1,6 +1,0 @@
-# Cheap always-on measurement: summary statistics at every location.
-name: stats
-stats:
-  include: null            # null = all locations; or glob list ["lc/*", ...]
-dump: null
-drift: null

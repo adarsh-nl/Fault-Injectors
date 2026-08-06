@@ -1,150 +1,97 @@
-"""
-lc.py
------
-Lightweight Collaboration (LC) module -- paper Fig. 3, Eqs. 7-10.
+"""LC -- Lightweight Collaboration (spec §1.3).
 
-Pipeline:  confidence weighting -> attention harmonisation -> dual conv
-branches -> element-wise fusion -> CSSM -> gating unit.
-
-Each stage is its own nn.Module; LCModule only wires them and emits taps.
+F_coll, F_i -> confidence weighting -> AttFusion harmonisation (A1) -> conv
+branches -> Z_fused = Z_coll + Z_i -> CSSM (Eq. 8) -> gating unit -> F_out.
 """
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Dict
 
 import torch
-from torch import nn
+import torch.nn as nn
 
-from cpbench.observation.taps import TapProtocol, emit
+from ..selfcheck import assert_shape
 from .cssm import CSSM
 
 
-class AttentionFusion(nn.Module):
-    """Per-pixel scaled-dot attention harmonising F_coll against ego context.
-
-    Assumption A1: the paper cites the OPV2V attention fusion block, which
-    attends over the *agent* axis per pixel. After CIT's winner-take-all,
-    each cell holds exactly one collaborator contribution, so the agent axis
-    degenerates to {collaborator cell, ego cell}. We therefore run two-token
-    attention per pixel: the collaborator feature queries {itself, the ego
-    feature} and is rewritten as the attention-weighted mixture -- which is
-    precisely AttFusion restricted to the two available witnesses.
-
-    Inputs   f_coll, f_ego : (B, C, H, W).
-    Output   harmonised    : (B, C, H, W).
-    """
+class AttFusion2(nn.Module):
+    """A1: per-pixel scaled-dot attention over the {ego, collaborators}
+    2-token agent axis (OPV2V AttFusion semantics; after CIT's disjoint sum
+    that is the only agent axis left -- spec §1.3.2). Output taken at the
+    collaborator token."""
 
     def __init__(self, channels: int) -> None:
         super().__init__()
-        self.q_proj = nn.Conv2d(channels, channels, 1, bias=False)
-        self.k_proj = nn.Conv2d(channels, channels, 1, bias=False)
-        self.v_proj = nn.Conv2d(channels, channels, 1, bias=False)
+        self.q = nn.Conv2d(channels, channels, 1)
+        self.k = nn.Conv2d(channels, channels, 1)
+        self.v = nn.Conv2d(channels, channels, 1)
         self.scale = channels ** -0.5
 
-    def forward(self, f_coll: torch.Tensor, f_ego: torch.Tensor,
-                taps: Optional[TapProtocol] = None) -> torch.Tensor:
-        q = self.q_proj(f_coll)                                   # (B, C, H, W)
-        keys = torch.stack([self.k_proj(f_coll), self.k_proj(f_ego)], dim=1)
-        vals = torch.stack([self.v_proj(f_coll), self.v_proj(f_ego)], dim=1)
-        emit(taps, q, module="AttentionFusion", location="lc/attn_query")
-        emit(taps, keys, module="AttentionFusion", location="lc/attn_key")
-        emit(taps, vals, module="AttentionFusion", location="lc/attn_value")
-        logits = (q.unsqueeze(1) * keys).sum(dim=2, keepdim=True) * self.scale
-        weights = torch.softmax(logits, dim=1)                    # (B, 2, 1, H, W)
-        emit(taps, weights, module="AttentionFusion", location="lc/attn_scores")
-        out = (weights * vals).sum(dim=1)
-        emit(taps, out, module="AttentionFusion", location="lc/attention_out")
+    def forward(self, f_ego: torch.Tensor, f_coll: torch.Tensor
+                ) -> torch.Tensor:
+        # tokens: (B, 2, C, H, W)
+        stack = torch.stack([f_ego, f_coll], dim=1)
+        q = self.q(f_coll)                                   # query: collab
+        k = torch.stack([self.k(f_ego), self.k(f_coll)], dim=1)
+        v = torch.stack([self.v(f_ego), self.v(f_coll)], dim=1)
+        att = (q.unsqueeze(1) * k).sum(dim=2, keepdim=True) * self.scale
+        att = torch.softmax(att, dim=1)                      # over 2 tokens
+        out = (att * v).sum(dim=1)
+        assert_shape(out, list(stack.shape[:1]) + list(stack.shape[2:]),
+                     "AttFusion2.out")
         return out
 
 
 class GatingUnit(nn.Module):
-    """Spatial gate + MLP fusion head (paper Eqs. 9-10).
-
-    g     = sigma(DWConv(Conv(X_ssm)))          (B, 1, H, W)
-    F_out = Conv(MLP(X_ssm) * g)                (B, C, H, W)
-    """
+    """Eq. 9-10: g = sigma(DWConv(Conv(X))) with g in R^{1xHxW} -- a
+    SINGLE-CHANNEL spatial gate broadcast over channels (paper-explicit
+    shape; an earlier draft gated per-channel, caught in fidelity review) --
+    then F_out = Conv(MLP(X) * g)."""
 
     def __init__(self, channels: int, hidden: int = 128) -> None:
         super().__init__()
-        self.gate_conv = nn.Conv2d(channels, hidden, 1)
-        self.gate_dw = nn.Conv2d(hidden, 1, 3, padding=1, groups=1)
-        self.mlp = nn.Sequential(nn.Conv2d(channels, hidden, 1),
-                                 nn.GELU(),
+        self.pre = nn.Conv2d(channels, 1, 1)          # Conv: C -> 1
+        self.dw = nn.Conv2d(1, 1, 3, padding=1)       # DWConv on the 1-ch map
+        self.mlp = nn.Sequential(nn.Conv2d(channels, hidden, 1), nn.GELU(),
                                  nn.Conv2d(hidden, channels, 1))
-        self.out_conv = nn.Conv2d(channels, channels, 3, padding=1)
-
-    def forward(self, x_ssm: torch.Tensor,
-                taps: Optional[TapProtocol] = None) -> torch.Tensor:
-        g = torch.sigmoid(self.gate_dw(self.gate_conv(x_ssm)))
-        emit(taps, g, module="GatingUnit", location="lc/gate")
-        out = self.out_conv(self.mlp(x_ssm) * g)
-        emit(taps, out, module="GatingUnit", location="lc/output")
-        return out
-
-
-class _ConvBranch(nn.Module):
-    """3x3 conv-BN-ReLU stack producing Z_i / Z_coll."""
-
-    def __init__(self, channels: int, layers: int = 2) -> None:
-        super().__init__()
-        mods = []
-        for _ in range(layers):
-            mods += [nn.Conv2d(channels, channels, 3, padding=1, bias=False),
-                     nn.BatchNorm2d(channels, eps=1e-3, momentum=0.01),
-                     nn.ReLU(inplace=True)]
-        self.net = nn.Sequential(*mods)
+        self.out = nn.Conv2d(channels, channels, 1)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.net(x)
+        g = torch.sigmoid(self.dw(self.pre(x)))       # (B, 1, H, W)
+        return self.out(self.mlp(x) * g)
 
 
 class LCModule(nn.Module):
-    """Lightweight Collaboration: fuse F_coll with F_i into F_out.
+    """The full LC block; `forward` returns F_out plus the fused mid-tensor
+    (for the teacher's alignment target)."""
 
-    Inputs
-    ------
-    f_ego   (B, C, H, W)  ego feature F_i.
-    f_coll  (B, C, H, W)  consolidated collaborative feature (CIT output).
-    s_ego   (B, 1, H, W)  ego confidence map S_i (sigmoid).
-    s_coll  (B, 1, H, W)  aggregated collaborator confidence S_coll.
-
-    Output  F_out (B, C, H, W) -- the feature-branch head input.
-
-    Example
-    -------
-    >>> lc = LCModule(channels=32, cssm=CSSM(32, 16, 4, pool=1))
-    >>> lc(torch.rand(1,32,8,8), torch.rand(1,32,8,8),
-    ...    torch.rand(1,1,8,8), torch.rand(1,1,8,8)).shape
-    torch.Size([1, 32, 8, 8])
-    """
-
-    def __init__(self, channels: int, cssm: Optional[CSSM] = None,
-                 gate_hidden: int = 128, conv_layers: int = 2) -> None:
+    def __init__(self, channels: int, d_state: int = 16,
+                 gate_hidden: int = 128,
+                 checkpoint_chunks: bool = True) -> None:
         super().__init__()
-        self.attention = AttentionFusion(channels)
-        self.branch_coll = _ConvBranch(channels, conv_layers)
-        self.branch_ego = _ConvBranch(channels, conv_layers)
-        self.cssm = cssm or CSSM(channels)
-        self.gating = GatingUnit(channels, gate_hidden)
+        self.att = AttFusion2(channels)
+        self.branch_coll = nn.Sequential(
+            nn.Conv2d(channels, channels, 3, padding=1), nn.ReLU(inplace=True))
+        self.branch_ego = nn.Sequential(
+            nn.Conv2d(channels, channels, 3, padding=1), nn.ReLU(inplace=True))
+        self.cssm = CSSM(channels, d_state,
+                         checkpoint_chunks=checkpoint_chunks)
+        self.gate = GatingUnit(channels, gate_hidden)
 
-    def forward(self, f_ego: torch.Tensor, f_coll: torch.Tensor,
-                s_ego: torch.Tensor, s_coll: torch.Tensor,
-                taps: Optional[TapProtocol] = None) -> torch.Tensor:
-        f_ego_w = f_ego * s_ego                                    # Eq. 7
-        f_coll_w = f_coll * s_coll
-        emit(taps, f_ego_w, module="LCModule", location="lc/weighted_ego")
-        emit(taps, f_coll_w, module="LCModule", location="lc/weighted_collab")
+    def forward(self, f_ego: torch.Tensor, conf_ego: torch.Tensor,
+                f_coll: torch.Tensor, s_coll: torch.Tensor
+                ) -> Dict[str, torch.Tensor]:
+        bsz, c, h, w = f_ego.shape
+        assert_shape(f_coll, (bsz, c, h, w), "LC.f_coll")
+        assert_shape(s_coll, (bsz, 1, h, w), "LC.s_coll")
 
-        harmonised = self.attention(f_coll_w, f_ego_w, taps=taps)
-
-        z_coll = self.branch_coll(harmonised)
-        z_ego = self.branch_ego(f_ego_w)
-        emit(taps, z_coll, module="LCModule", location="lc/z_collab")
-        emit(taps, z_ego, module="LCModule", location="lc/z_ego")
-
-        z_fused = z_ego + z_coll
-        emit(taps, z_fused, module="LCModule", location="lc/z_fused")
-
-        x_ssm = self.cssm(z_fused, z_ego, taps=taps)               # Eq. 8
-        return self.gating(x_ssm, taps=taps)                       # Eqs. 9-10
+        f_coll_w = f_coll * s_coll                        # F̂_coll
+        f_ego_w = f_ego * torch.sigmoid(conf_ego)         # F̂_i
+        f_coll_h = self.att(f_ego_w, f_coll_w)            # A1 harmonised
+        z_coll = self.branch_coll(f_coll_h)
+        z_i = self.branch_ego(f_ego_w)
+        z_fused = z_coll + z_i                            # verbatim
+        x_ssm = self.cssm(z_fused, z_i)                   # Eq. 8
+        f_out = self.gate(x_ssm)
+        return {"f_out": f_out, "z_fused": z_fused, "z_i": z_i}

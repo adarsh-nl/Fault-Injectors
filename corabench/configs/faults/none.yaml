@@ -1,5 +1,0 @@
-# Clean condition: identity bridge, no corruption anywhere.
-name: clean
-pipeline: {}
-agent_scope: non-ego
-sweep: []

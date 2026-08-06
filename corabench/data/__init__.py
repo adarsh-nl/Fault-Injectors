@@ -1,9 +1,4 @@
-"""CoRA's cooperative dataset.
+from .dataset import CoRADataset
+from .opencood_adapter import CoRABatchAdapter, build_from_config
 
-BEV geometry, voxelisation, anchors and box decoding are paper-agnostic and
-live in ``cpbench.data``.
-"""
-
-from .cooperative import CoRADataset, collate_cooperative
-
-__all__ = ["CoRADataset", "collate_cooperative"]
+__all__ = ["CoRADataset", "CoRABatchAdapter", "build_from_config"]

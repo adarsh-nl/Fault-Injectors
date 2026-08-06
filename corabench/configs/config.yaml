@@ -1,21 +1,4 @@
-# Root configuration. Groups are composed from configs/<group>/<name>.yaml;
-# swap a group with `group=name` on the CLI, set leaves with `a.b.c=value`.
-defaults:
-  model: cora
-  dataset: synthetic
-  faults: none
-  taps: none
-  trainer: default
-
-# Base directory every dataset path derives from. null means: take
-# $CPBENCH_DATA_ROOT if set, else the built-in default. Never hardcode an
-# absolute dataset path in a group file -- see cpbench/utils/paths.py.
-data_root: null
-
-experiment_name: ${model.name}_${dataset.name}_${faults.name}
-paper: "CoRA (arXiv:2512.13191v1, AAAI 2026)"
+defaults: {model: cora, dataset: synthetic, trainer: default}
+experiment_name: cora_${dataset.name}
 seed: 2026
 deterministic: true
-results_dir: results
-log_predictions: false
-device: auto            # auto | cuda | cpu

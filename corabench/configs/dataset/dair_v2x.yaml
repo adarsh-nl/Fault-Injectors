@@ -1,18 +1,2 @@
-# DAIR-V2X-C (vehicle + infrastructure) via src.datasets.DairV2XDataset.
-name: dair_v2x
-adapter: dair-v2x
-root: ${data_root}/air-thu/dair-v2x-c
-train_split: null                        # DAIR adapter takes one root
-val_split: null
-test_split: null
-scenarios: null
-fps: 10.0
-grid:
-  voxel_size: [0.4, 0.4]
-  point_range: [-100.8, -40.0, -3.0, 100.8, 40.0, 1.0]
-  downsample: 2
-max_points_per_pillar: 32
-max_pillars: 20000
-max_agents: 2
-comm_range_m: 70.0
-categories: null
+name: dair-v2x
+kwargs: {}
