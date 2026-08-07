@@ -50,9 +50,39 @@ attributable. ``spatial_correction_matrix`` is ``eye(4)`` whenever
 cannot reach it either.
 """
 
+import hashlib
+import os
 from collections import OrderedDict
 
 import numpy as np
+
+# ── wrapper contract version (provenance, self-maintaining) ─────────────────
+# Bump when the adapter's OUTPUT SEMANTICS change, so a results bundle can be
+# judged by what produced it rather than by a hand-kept list of job ids.
+#   1 = transformation_matrix RECOMPUTED from params['lidar_pose'] -- silently
+#       stripped OpenCOOD's shipped add_loc_noise perturbation (DEFECTIVE).
+#   2 = transformation_matrix composed as a right-multiplied DELTA onto the
+#       baked matrix: T_new = T_orig @ inv(A_clean) @ A_perturbed. Preserves
+#       shipped noise and is invariant to cur_ego_pose_flag. (2026-08-06)
+WRAPPER_CONTRACT_VERSION = 2
+
+
+def wrapper_fingerprint() -> dict:
+    """Content hash of the adapter sources that determine a cell's numbers.
+
+    A hash rather than a git SHA: the working tree is what actually ran, and
+    it is routinely ahead of any commit. Uncommitted edits must still change
+    the fingerprint, or provenance lies exactly when it matters most.
+    """
+    here = os.path.dirname(os.path.abspath(__file__))
+    h = hashlib.sha256()
+    for name in ('opencood.py', 'runtime.py', 'modality.py'):
+        p = os.path.join(here, name)
+        if os.path.exists(p):
+            with open(p, 'rb') as fh:
+                h.update(fh.read())
+    return {'wrapper_contract_version': WRAPPER_CONTRACT_VERSION,
+            'adapter_sha256': h.hexdigest()[:16]}
 
 from ..datasets.base import AgentFrame, Box3D, CooperativeSample
 from ..datasets.opv2v import x_to_world
@@ -123,6 +153,12 @@ class OpenCOODAdapter:
         # reproduce it exactly.
         sample.meta['key_order'] = [str(k) for k in base_data_dict]
         sample.meta['frame_index'] = frame_index
+        # Pristine copy of every agent-to-world pose, kept so `from_canonical`
+        # can form the perturbation DELTA (spec: T_new = T_orig @ inv(A) @ A').
+        # Without it the only way back to a matrix is a full recompute, which
+        # is exactly the bug this replaces.
+        sample.meta['clean_poses'] = {
+            aid: ag.pose.copy() for aid, ag in sample.agents.items()}
         return sample
 
     # ── canonical -> OpenCOOD ───────────────────────────────────────────
@@ -146,9 +182,7 @@ class OpenCOODAdapter:
             raise ValueError('the ego agent was removed from the sample; '
                              'ego must never be dropped')
 
-        ego_pose = sample.agents[ego_id].pose
-        inv_ego = np.linalg.inv(ego_pose)
-
+        clean_poses = sample.meta.get('clean_poses', {})
         out = OrderedDict()
         for key in sample.meta['key_order']:
             if key not in sample.agents:
@@ -166,8 +200,37 @@ class OpenCOODAdapter:
                     'agent {}: pass-through field(s) {} lost in the '
                     'adapter round trip'.format(key, missing))
 
-            # The one derived quantity a fault is allowed to move.
-            params['transformation_matrix'] = inv_ego @ agent.pose
+            # The one derived quantity a fault is allowed to move -- composed
+            # as a DELTA onto the matrix OpenCOOD baked, never recomputed.
+            #
+            # Convention (read from source, not inferred):
+            #   x_to_world(pose)            = T_x->world          (point-xf)
+            #   x1_to_x2(x1, x2)            = T_x1->x2
+            #   transformation_matrix       = x1_to_x2(cav, ego)  = T_agent->ego
+            #   consumer project_points_by_matrix_torch computes p_ego = T @ p
+            #
+            # With E the ego reference OpenCOOD chose and A_b the agent pose it
+            # baked in, T_orig = inv(E) @ A_b. A pose fault makes the agent
+            # broadcast A' = A @ D, D = inv(A) @ A' being the perturbation in
+            # the AGENT's frame, so
+            #     T_new = inv(E) @ (A_b @ D) = T_orig @ D          RIGHT-multiply.
+            # Left-multiplying would apply the delta in the EGO frame (a
+            # rotation about the ego origin) -- plausible magnitudes, wrong
+            # geometry.
+            #
+            # Because E and A_b appear only inside T_orig, this preserves
+            # BOTH the shipped add_loc_noise perturbation (which OpenCOOD
+            # applies to a local copy and never writes into
+            # params['lidar_pose']) and the cur_ego_pose_flag=False ego
+            # reference. Recomputing from params['lidar_pose'] silently
+            # stripped both: measured 0.177 (Where2comm) / 0.205 (V2X-ViT)
+            # matrix error with NO fault injected.
+            clean = clean_poses.get(key)
+            if clean is not None and not np.array_equal(clean, agent.pose):
+                delta = np.linalg.inv(clean) @ agent.pose
+                params['transformation_matrix'] = (
+                    np.asarray(params['transformation_matrix']) @ delta)
+            # else: pose untouched -> leave the baked matrix bit-identical.
             if write_back_pose:
                 params['lidar_pose'] = _pose6_from_matrix(
                     agent.pose, params['lidar_pose'])

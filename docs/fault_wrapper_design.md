@@ -151,17 +151,67 @@ Downstream, `get_item_single_car` consumes `params['transformation_matrix']`
 > returns is a silent no-op.** The matrices are already baked. This is the single
 > thing that would make a naive wrapper report "PoseError has no effect."
 
-All three eval configs are `IntermediateFusionDataset` with `fusion.args: []`,
-so `proj_first=True` and `cur_ego_pose_flag=True` (both by the `not in []`
-default). Verified:
+**CORRECTED 2026-08-06.** This section previously claimed all three configs
+use `fusion.args: []` and therefore `cur_ego_pose_flag=True`. That was
+verified for CoBEVT and Where2comm only; **V2X-ViT ships
+`cur_ego_pose_flag: False`**, which routes `reform_param` down its other
+branch (`transformation_matrix` referenced to the *delayed* ego pose, and a
+non-identity `spatial_correction_matrix` the model consumes). The claim was
+written before V2X-ViT's checkpoint was located and was never re-validated
+when it was.
 
-| model | config | fusion | wild_setting |
-|---|---|---|---|
-| CoBEVT | `~/opencood-eval/cobevt/config.yaml` | `IntermediateFusionDataset`, `args: []` | `async: false`, `loc_err: false` (Perfect) |
-| Where2comm | `~/opencood-eval/where2comm/config.yaml` | `IntermediateFusionDataset`, `args: []` | `async: true`, `loc_err: true`, `xyz_std: 0.2`, `ryp_std: 0.2` (Noisy) |
-| V2X-ViT | `~/v2xvit-official` | `IntermediateFusionDataset` | Noisy |
+| model | config | fusion args | `cur_ego_pose_flag` | wild_setting |
+|---|---|---|---|---|
+| CoBEVT | `~/opencood-eval/cobevt/config.yaml` | `args: []` | True (default) | `async: false`, `loc_err: false` (Perfect) |
+| Where2comm | `~/opencood-eval/where2comm/config.yaml` | `args: []` | True (default) | `async: true`, `loc_err: true`, `xyz_std/ryp_std 0.2` (Noisy) |
+| V2X-ViT | `/datasets/.../v2xset_checkpoints/v2x-vit/config.yaml` | `args: {cur_ego_pose_flag: False, ...}` | **False** | `async: true`, `loc_err: true` (Noisy) |
 
-### The resolution: recompute the matrices in `from_canonical`
+**Why it no longer matters.** The delta composition (§ below) writes
+`T_new = T_orig @ inv(A_clean) @ A_perturbed`. The ego reference `E` and the
+baked agent pose `A_b` appear **only inside `T_orig`**, which is taken
+verbatim from OpenCOOD, so the form is invariant to which branch
+`reform_param` took. `spatial_correction_matrix` is never touched.
+
+Verified empirically on V2X-ViT (`cur_ego_pose_flag=False`, `loc_err=true`),
+220 poses: null-spec and zero-sigma both give `max|dT| = 0.0000` and
+`max|d spatial_correction| = 0.0e+00`; sigma=0.4 gives `max|dT| = 1.1389`
+with the correction matrix still untouched. The old recompute-from-clean-pose
+form was **not** invariant and produced `max|dT| = 0.205` with no fault
+injected.
+
+### SUPERSEDED 2026-08-06: recompute was wrong; compose a delta instead
+
+The recompute described immediately below was the original resolution and it
+**silently discarded OpenCOOD's own `add_loc_noise` perturbation**, which is
+applied to a local copy inside `reform_param` and never written into
+`params['lidar_pose']`. Rebuilding the matrix from that clean pose therefore
+stripped the shipped noise for any model with `loc_err: true`. Measured with
+NO fault injected: `max|dT|` = 0.177 (Where2comm), 0.205 (V2X-ViT), 0.000
+(CoBEVT, which ships Perfect and so was unaffected).
+
+**The correct form composes the perturbation as a right-multiplied delta onto
+the matrix OpenCOOD baked:**
+
+```
+T_new = T_orig @ inv(A_clean) @ A_perturbed
+```
+
+derived from the convention read at source: `x_to_world` = `T_x->world`
+(point-transform), `x1_to_x2(cav, ego)` = `T_agent->ego`, and the consumer
+`project_points_by_matrix_torch` computes `p_ego = T @ p_agent`. With
+`T_orig = inv(E) @ A_b` and a broadcast pose `A' = A @ D`, we get
+`inv(E) @ (A_b @ D) = T_orig @ D` — right-multiply. Left-multiplying would
+apply the delta in the *ego* frame (a rotation about the ego origin):
+plausible magnitudes, wrong geometry, and it would pass a magnitude-only
+fire-check.
+
+When the pose is untouched the matrix is left byte-identical rather than
+multiplied by a near-identity, so the reduction is exact (measured 0.0 over
+220 poses, both null-spec and sigma=0).
+
+The original text follows for the record.
+
+### (superseded) recompute the matrices in `from_canonical`
 
 `from_canonical` rebuilds `transformation_matrix` from the (possibly perturbed)
 canonical poses:

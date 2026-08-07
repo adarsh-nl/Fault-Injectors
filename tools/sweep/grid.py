@@ -108,10 +108,28 @@ PARTS = {
 
 def cells(model, part):
     """Yield (outdir, spec_json) lines for one job. Every job starts with a
-    clean pass (part a additionally runs the determinism repeat)."""
+    clean pass (part a additionally runs the determinism repeat AND the
+    mandatory wrapped-null gate).
+
+    WRAPPED-NULL GATE (mandatory, non-skippable -- added 2026-08-06 after the
+    pose-contamination bug). ``none/clean`` is the UNWRAPPED official
+    pipeline at the model's SHIPPED wild_setting; ``none/wrapped_null`` is the
+    wrapper carrying an empty pipeline at that same shipped setting. The two
+    must agree within the model's determinism floor.
+
+    Why it must compare against the SHIPPED baseline and not a forced-clean
+    run: the bug it exists to catch was the adapter silently discarding
+    OpenCOOD's own ``add_loc_noise`` perturbation (applied to a local copy and
+    never written into ``params['lidar_pose']``). A forced-clean reference has
+    no such noise, so it would agree with the broken adapter and the golden
+    would encode the very defect it guards. Measured before the fix:
+    0.177 (Where2comm) / 0.205 (V2X-ViT) matrix error with NO fault injected;
+    CoBEVT was 0.000 only because it ships Perfect.
+    """
     out = [('none/clean_%s' % part if part != 'a' else 'none/clean', 'null')]
     if part == 'a':
         out.append(('none/clean_rep', 'null'))
+        out.append(('none/wrapped_null', '{}'))    # mandatory gate
     for inj in PARTS[part]:
         unit, tiers = INJECTORS[inj]
         for tier_name, (value, kwargs) in zip(TIER_NAMES, tiers):

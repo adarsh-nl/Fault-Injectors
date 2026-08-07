@@ -39,12 +39,40 @@ COLUMNS = ['model', 'dataset', 'setting', 'injector', 'severity_tier',
            'extra_metric', 'job_id', 'timestamp']
 
 
+# Slurm jobs that ran with the PRE-FIX adapter (from_canonical recomputed
+# transformation_matrix from the clean pose, stripping shipped loc_err noise).
+# Two of these were still in flight when the post-fix re-runs were submitted
+# and copied cells into the SAME results path -- 558077 landed two snow cells
+# into the post-fix where2comm tree. Cell provenance is therefore checked by
+# job id, not by directory, because directory identity is not sufficient when
+# an old job outlives the re-run's submission.
+PREFIX_JOBS = {'558076', '558077', '558078',      # where2comm, pre-fix
+               '558105', '558106', '558107'}      # v2xvit, pre-fix
+
+# Primary provenance test. Cells written from 2026-08-07 carry
+# `wrapper_contract_version` (see src/adapters/opencood.py); anything below
+# this ran an adapter whose output semantics are known-defective.
+MIN_WRAPPER_CONTRACT_VERSION = 2
+
+
 def read_bundle(path):
     f = os.path.join(path, 'fi_result.json')
     if not os.path.exists(f):
         return None
     with open(f) as fh:
         r = json.load(fh)
+    # Provenance, primary: the recorded contract version. Self-maintaining --
+    # a future defective adapter is caught by bumping the constant, with no
+    # job ids to remember.
+    ver = r.get('wrapper_contract_version')
+    if ver is not None and ver < MIN_WRAPPER_CONTRACT_VERSION:
+        r['_prefix_contaminated'] = 'contract v%s < v%s' % (
+            ver, MIN_WRAPPER_CONTRACT_VERSION)
+    # Belt-and-braces: cells produced BEFORE the field existed cannot be
+    # retro-tagged, so the enumerated job list still covers them.
+    jid = str(r.get('job_id') or '')
+    if jid in PREFIX_JOBS:
+        r['_prefix_contaminated'] = 'job %s (pre-versioning)' % jid
     r['_timestamp'] = datetime.datetime.fromtimestamp(
         os.path.getmtime(f)).isoformat(timespec='seconds')
     rows = []
@@ -190,6 +218,30 @@ def main():
         },
         'graded': {m: cfg['graded'] for m, cfg in MODELS.items()},
         'clean_checks': {}, 'failed_cells': [], 'flags': [],
+        'wrapped_null_gate': {},
+        'superseded': {
+            'scope': 'AP columns only (clean_ap*, faulty_ap*, delta_*, '
+                     'rel_drop_*) of v2xvit and where2comm rows produced '
+                     'before the 2026-08-06 pose-composition fix.',
+            'reason': 'from_canonical recomputed transformation_matrix from '
+                      "params['lidar_pose'], silently discarding OpenCOOD's "
+                      'shipped add_loc_noise perturbation (applied to a local '
+                      'copy, never written back). Null-wrapper matrix error '
+                      'with NO fault injected: 0.177 (where2comm), 0.205 '
+                      '(v2xvit). CoBEVT ships loc_err=false so its error was '
+                      '0.000 and its cells are UNAFFECTED.',
+            'fix': 'transformation_matrix is now composed as a delta onto the '
+                   'baked matrix: T_new = T_orig @ inv(A_clean) @ A_perturbed '
+                   '(right-multiply, derived from T_agent->ego point-transform '
+                   'convention). Invariant to cur_ego_pose_flag and to shipped '
+                   'noise, since both live only inside T_orig.',
+            'still_valid_from_those_runs': [
+                'injection_summary.csv rows and all fire-checks',
+                'lidar_snow removed_frac / scatter mechanics',
+                'n_frames, n_injections, agent-count strata denominators',
+                'cobevt rows in full (gate measured 0.000)'],
+            'models_affected': ['v2xvit', 'where2comm'],
+        },
     }
 
     for model, mcfg in MODELS.items():
@@ -212,6 +264,57 @@ def main():
             floor70 = abs(clean_rep['ap_70'] - c70)
             if clean_rep['_log']:
                 flags.append('FIRE-FAIL %s/clean_rep: logged injections' % model)
+
+        # ── MANDATORY wrapped-null gate (non-skippable) ─────────────────
+        # The wrapper carrying an EMPTY pipeline must reproduce the unwrapped
+        # SHIPPED-setting control. Absence is itself a failure: this gate
+        # exists because a missing wrapped-null cell is exactly how the
+        # pose-contamination bug went unnoticed for two models.
+        wnull = read_bundle(os.path.join(mroot, 'none', 'wrapped_null'))
+        # COMPOSITION: a gate cell of untrusted provenance is NOT a gate. It
+        # must degrade to MISSING (fail closed), never be compared. Observed
+        # 2026-08-07: without this, a planted pre-fix gate cell was accepted
+        # and recorded verdict=PASS -- the two guards did not compose, and the
+        # contamination check only ran on injector cells.
+        if wnull is not None and wnull.get('_prefix_contaminated'):
+            flags.append('PREFIX-CONTAMINATED %s/none/wrapped_null: %s -- the '
+                         'GATE ITSELF is untrusted; treating as MISSING'
+                         % (model, wnull['_prefix_contaminated']))
+            wnull = None
+        # The clean control and its repeat are equally load-bearing: the gate
+        # is measured against them, so their provenance must hold too.
+        for nm, bnd in (('clean', clean), ('clean_rep', clean_rep)):
+            if bnd is not None and bnd.get('_prefix_contaminated'):
+                flags.append('PREFIX-CONTAMINATED %s/none/%s: %s -- the gate '
+                             'reference is untrusted' % (model, nm,
+                                                         bnd['_prefix_contaminated']))
+        gate_floor = max(floor50 if floor50 == floor50 else 0.0,
+                         floor70 if floor70 == floor70 else 0.0, 1e-4)
+        if wnull is None:
+            flags.append('GATE-MISSING %s: no none/wrapped_null cell -- the '
+                         'mandatory wrapped-null gate did not run; fault '
+                         'cells are UNVERIFIED against adapter round-trip '
+                         'error' % model)
+            manifest['wrapped_null_gate'][model] = 'MISSING'
+        else:
+            g50 = abs(wnull['ap_50'] - c50)
+            g70 = abs(wnull['ap_70'] - c70)
+            ok = g50 <= gate_floor and g70 <= gate_floor
+            manifest['wrapped_null_gate'][model] = {
+                'unwrapped_shipped': {'ap_50': c50, 'ap_70': c70},
+                'wrapped_null': {'ap_50': wnull['ap_50'],
+                                 'ap_70': wnull['ap_70']},
+                'd50': g50, 'd70': g70, 'floor_used': gate_floor,
+                'verdict': 'PASS' if ok else 'FAIL'}
+            if wnull['_log']:
+                flags.append('FIRE-FAIL %s/wrapped_null: logged %d injections '
+                             '(must be zero)' % (model, len(wnull['_log'])))
+            if not ok:
+                flags.append('GATE-FAIL %s: wrapped-null differs from '
+                             'unwrapped-shipped by d50=%.3e d70=%.3e '
+                             '(floor %.1e) -- the adapter alters the model '
+                             'input; every fault cell for this model is '
+                             'INVALID' % (model, g50, g70, gate_floor))
 
         # cross-job clean checks (parts b, c)
         for part in ('b', 'c'):
@@ -276,6 +379,18 @@ def main():
                 b = read_bundle(os.path.join(mroot, injector, tier))
                 if b is None:
                     missing.append('%s/%s/%s' % (model, injector, tier))
+                    continue
+                if b.get('_prefix_contaminated'):
+                    # A pre-fix job wrote into the post-fix tree (old jobs can
+                    # outlive the re-run's submission). Refuse the cell rather
+                    # than silently emitting a contaminated AP row.
+                    flags.append('PREFIX-CONTAMINATED %s/%s/%s: written by '
+                                 'job %s which ran the pre-fix adapter; cell '
+                                 'REFUSED (re-run required)'
+                                 % (model, injector, tier,
+                                    b['_prefix_contaminated']))
+                    missing.append('%s/%s/%s (prefix-contaminated)'
+                                   % (model, injector, tier))
                     continue
                 ok, n_inj, extra = fire_check(model, injector, value, spec,
                                               b['_log'], nonego_denom, flags)

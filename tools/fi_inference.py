@@ -44,6 +44,7 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.adapters import FaultSpec, make_faulty_dataset   # noqa: E402
+from src.adapters.opencood import wrapper_fingerprint     # noqa: E402
 
 # The conditions this PoC runs. `clean` is a NULL pipeline that still traverses
 # the whole adapter round trip, so Gate 2 tests the adapter and not a bypass.
@@ -242,6 +243,9 @@ def main():
                        'wild_setting_shipped': shipped_wild,
                        'wild_forced_off': bool(args.fi_force_wild_off),
                        'n_frames': n_frames.get('n'),
+                       # provenance: judge a cell by WHAT PRODUCED IT,
+                       # not by a hand-kept job-id list.
+                       **wrapper_fingerprint(),
                        'job_id': os.environ.get('SLURM_JOB_ID'),
                        'ap_30': captured.get('ap30'),
                        'ap_50': captured.get('ap_50'),
