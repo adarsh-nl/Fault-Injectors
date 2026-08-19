@@ -71,6 +71,10 @@ cora-nan-diag/
 
 # admit the fault visualisation assets the README references (PNG contact
 # sheets and small GIFs); keep the heavy MP4 animations and NPZ data ignored
+!/results/apf/
+!/results/apf/**
+# Gate 0 measured tables. Small JSON, and every APF number is now indexed
+# against them, so they are provenance, not scratch output.
 !/results/fault_injector_visualisation/
 !/results/fault_injector_visualisation/**
 /results/fault_injector_visualisation/**/*.mp4
