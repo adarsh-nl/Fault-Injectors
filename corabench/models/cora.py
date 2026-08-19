@@ -34,7 +34,9 @@ class CoRAModel(nn.Module):
                  reg_dim: int = 8, d_state: int = 16,
                  cit_strategy: str = "winner_take_all", cit_topk: int = 2,
                  teacher_enabled: bool = True, pac_enabled: bool = True,
-                 checkpoint_chunks: bool = True, head_hw=None) -> None:
+                 checkpoint_chunks: bool = True, head_hw=None,
+                 dt_bound: float = 0.2, fp32_island: bool = True,
+                 ema_momentum: float = 0.999) -> None:
         """`head_hw`: spatial size the heads/fusion must run at. OpenCOOD's
         anchors live at canvas/4 while the cpbench encoder outputs canvas/2;
         when head_hw is exactly half the encoder output, an avg_pool2d(2)
@@ -45,8 +47,10 @@ class CoRAModel(nn.Module):
         self.head_hw = tuple(head_hw) if head_hw is not None else None
         self.conf = ConfidenceHead(channels)
         self.cit = CITransmission(cit_strategy, cit_topk)
-        self.lc = LCModule(channels, d_state,
+        self.lc = LCModule(channels, d_state, dt_bound=dt_bound,
+                           fp32_island=fp32_island,
                            checkpoint_chunks=checkpoint_chunks)
+        self.last_teacher_stats = None
         # shared local head (per-agent object branch) + LC branch head
         self.local_head = DetectionHead(channels, num_anchors,
                                         num_classes=1, reg_dim=reg_dim)
@@ -62,11 +66,17 @@ class CoRAModel(nn.Module):
         # spec §5.2 -- the focal prior is load-bearing
         assert_focal_bias(self.local_head.cls_head, "local_head")
         assert_focal_bias(self.lc_head.cls_head, "lc_head")
+        # consumed by _ensure_teacher(), which builds the teacher LAZILY
+        # after .to(device); a local in __init__ is out of scope there.
+        self._ema_momentum = float(ema_momentum)
 
     # teacher is created lazily so .to(device) has happened first
     def _ensure_teacher(self) -> None:
         if self._teacher_enabled and self.teacher is None:
-            self.teacher = EMATeacher(self.lc)
+            # momentum configurable for the sec 7.7 arm C: tau = 1/(1-m),
+            # so 0.999 -> 999 steps, 0.99 -> 100 steps.
+            self.teacher = EMATeacher(self.lc,
+                                      momentum=self._ema_momentum)
             dev = next(self.lc.parameters()).device
             self.teacher.to(dev)
 
@@ -117,6 +127,17 @@ class CoRAModel(nn.Module):
                 with torch.no_grad():
                     t = self.teacher.module(f_ego, conf_ego, dense,
                                             torch.ones_like(conf_ego))
+                # Gate observable (job 558108): the teacher is fed the DENSE
+                # unmasked collaborator sum (~N x the student's CIT-masked
+                # sum) and crossed the fp16 ceiling 825 steps BEFORE the
+                # student. Its magnitude is the leading indicator, so it is
+                # measured explicitly rather than inferred from the loss.
+                with torch.no_grad():                            # no-grad-ok
+                    tm = float(t["f_out"].abs().max())
+                    sm = float(lc["f_out"].abs().max())
+                    self.last_teacher_stats = {
+                        'teacher_absmax': tm, 'student_absmax': sm,
+                        'ratio': tm / max(sm, 1e-12)}
                 align_terms.append(align_loss(lc["f_out"], t["f_out"]))
 
             if self.pac is not None:
