@@ -9,6 +9,8 @@ into an sbatch script needs no translation.
 """
 
 from __future__ import annotations
+import torch
+from cpbench.utils.torchio import load as _torch_load
 
 import argparse
 import logging
@@ -49,5 +51,5 @@ def load_weights(model, checkpoint: str, device) -> None:
     reports success -- the worst possible silent failure for a benchmark.
     """
     import torch
-    state = torch.load(checkpoint, map_location=device)
+    state = _torch_load(checkpoint, map_location=device)
     model.load_state_dict(state.get("model", state), strict=True)

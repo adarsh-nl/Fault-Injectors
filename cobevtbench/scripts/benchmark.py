@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import List, Optional
 
 import torch
+from cpbench.utils.torchio import load as _torch_load
 
 from . import common
 
@@ -79,7 +80,7 @@ def run(cfg, checkpoint: Optional[str] = None,
 
 
 def _load_weights(model, checkpoint: str, device) -> None:
-    state = torch.load(checkpoint, map_location=device)
+    state = _torch_load(checkpoint, map_location=device)
     model.load_state_dict(state["model"] if "model" in state else state)
     logger.info("loaded weights from %s", checkpoint)
 

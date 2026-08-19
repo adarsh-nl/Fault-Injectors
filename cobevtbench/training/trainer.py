@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Optional
 
 import torch
+from cpbench.utils.torchio import load as _torch_load
 from torch import nn
 
 from cpbench.logbook import ExperimentLogger, TrainRecord
@@ -193,7 +194,7 @@ class Trainer:
         """Resume. ``strict=False`` is how an ablation checkpoint loads into a
         full model -- the parameter names match by design, so only genuinely
         absent modules are skipped."""
-        state = torch.load(path, map_location=self.device)
+        state = _torch_load(path, map_location=self.device)
         self.model.load_state_dict(state["model"], strict=strict)
         self.optimizer.load_state_dict(state["optimizer"])
         self.scaler.load_state_dict(state["scaler"])

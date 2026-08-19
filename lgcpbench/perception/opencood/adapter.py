@@ -54,6 +54,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Sequence, Tuple
 
 import torch
+from cpbench.utils.torchio import load as _torch_load
 import torch.nn as nn
 
 from cpbench.observation.taps import TapProtocol, emit
@@ -172,7 +173,7 @@ class OpenCOODBackbone(nn.Module):
         if not path.exists():
             raise FileNotFoundError(f"checkpoint not found: {path}")
 
-        state = torch.load(str(path), map_location="cpu")
+        state = _torch_load(str(path), map_location="cpu")
         if isinstance(state, dict) and "model_state_dict" in state:
             state = state["model_state_dict"]
 
