@@ -64,11 +64,13 @@ def _build_estimators(names: List[str], args) -> Dict[str, object]:
         if name == 'infonce':
             built['infonce'] = InfoNCEEstimator(
                 temperature=args.temperature, epochs=args.epochs_infonce,
-                batch_size=args.batch_size, seed=args.seed)
+                batch_size=args.batch_size, seed=args.seed,
+                holdout=args.holdout)
         elif name == 'smile':
             built['smile'] = SMILEEstimator(
                 clip=args.clip, epochs=args.epochs_smile,
-                batch_size=args.batch_size, seed=args.seed)
+                batch_size=args.batch_size, seed=args.seed,
+                holdout=args.holdout)
         else:
             raise ValueError(f"Unknown estimator '{name}'. Choose from infonce, smile.")
     return built
@@ -89,6 +91,19 @@ def main(argv=None) -> None:
     p.add_argument('--temperature', type=float, default=0.07)
     p.add_argument('--clip', type=float, default=5.0)
     p.add_argument('--seed', type=int, default=0)
+    # HOLDOUT was previously unreachable from the CLI: both estimators
+    # default to holdout=0.0 (in-sample, optimistic -- the critic can
+    # memorise the pairing and report a sizeable bound even for independent
+    # data), and run_mi exposed no way to change it. Relative comparisons
+    # under a fixed protocol are fine at 0.0 because the bias is
+    # common-mode, but NO ABSOLUTE MI VALUE should be quoted from an
+    # in-sample run. 0.3 is the value src/info_quality/tests demonstrates
+    # drives independent-data InfoNCE below 0.15.
+    p.add_argument('--holdout', type=float, default=0.0,
+                   help='fraction of samples held out to evaluate the bound '
+                        'on UNSEEN pairs. 0.0 = in-sample (biased upward; '
+                        'acceptable for relative clean-vs-faulty comparison '
+                        'only). Use 0.3 for any absolute value.')
     p.add_argument('--fused', default=None, help='representation key of the fused feature')
     p.add_argument('--unimodal', nargs='+', default=None,
                    help='unimodal representation keys for the fusion-gain summary')
@@ -101,7 +116,10 @@ def main(argv=None) -> None:
     rep_names = list(reps.keys())
     print(f'Loaded {len(reps)} representation(s) from {args.features}: '
           f'{", ".join(f"{k}{v.shape}" for k, v in reps.items())}')
-    print(f'Target {args.target_key}: {Y.shape} | PCA dims: {pca_dims} | seed: {args.seed}')
+    print(f'Target {args.target_key}: {Y.shape} | PCA dims: {pca_dims} | '
+          f'seed: {args.seed} | holdout: {args.holdout}'
+          + ('  [IN-SAMPLE: relative comparison only, do not quote absolutes]'
+             if args.holdout <= 0 else ''))
 
     estimators = _build_estimators(args.estimators, args)
     results: Dict[str, Dict[str, float]] = {}

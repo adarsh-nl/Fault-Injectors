@@ -219,6 +219,35 @@ class FeatureCollector:
                             'once per forward pass.')
 
         Y = np.stack(labels, axis=0)
+        # ── DEGENERATE-TARGET GUARD ─────────────────────────────────────
+        # A label_fn that silently returns a constant (the classic case is a
+        # bare `except: return np.zeros(...)` fallback swallowing a wrong key
+        # path) produces a Y with no variance. `standardise` then divides by
+        # sd + 1e-8, every column collapses to ~0, and BOTH estimators report
+        # MI ~= 0 for EVERY condition -- a plausible-looking null result that
+        # is really an instrumentation failure. It is the worst failure mode
+        # available here, because nothing about the output looks wrong.
+        # Assert positively, in the COLLECTOR, so no adapter can reintroduce
+        # it downstream.
+        if Y.ndim != 2:
+            raise RuntimeError(
+                'label_fn must return a fixed-length 1-D vector per sample; '
+                'stacked Y has shape %s.' % (Y.shape,))
+        sd = Y.std(axis=0)
+        n_live = int((sd > 0).sum())
+        if not np.isfinite(Y).all():
+            raise RuntimeError('Y contains non-finite values (%d of %d).'
+                               % (int((~np.isfinite(Y)).sum()), Y.size))
+        if float(sd.max()) <= 0.0:
+            raise RuntimeError(
+                'DEGENERATE TARGET: Y is CONSTANT across all %d samples '
+                '(max per-column std = %.3e, %d/%d columns non-degenerate). '
+                'Mutual information against a constant target is 0 by '
+                'construction, so every condition would report MI ~= 0 and '
+                'the comparison would be meaningless. This almost always '
+                'means label_fn is failing silently -- check its key path. '
+                'The run is aborted rather than producing a plausible null.'
+                % (Y.shape[0], float(sd.max()), n_live, Y.shape[1]))
         features = {name: self._drain(name) for name in self._buffers}
         present = {k: v for k, v in features.items() if v is not None}
         missing = [k for k, v in features.items() if v is None]

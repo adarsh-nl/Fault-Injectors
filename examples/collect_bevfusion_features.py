@@ -67,15 +67,18 @@ def nuscenes_label_fn(batch) -> np.ndarray:
     framework-specific code we want isolated in the adapter. Adjust the key path
     if your pipeline names things differently.
     """
-    try:
-        # mmdet3d commonly nests GT labels under data samples / metainfo.
-        data_samples = batch['data_samples']
-        sample = data_samples[0] if isinstance(data_samples, (list, tuple)) else data_samples
-        labels = np.asarray(sample.gt_instances_3d.labels_3d.cpu().numpy())
-    except Exception:
-        # Fall back to an all-zero vector so collection does not crash; you will
-        # want to fix the key path above for real runs.
-        return np.zeros(len(NUSCENES_CLASSES), dtype=np.float32)
+    # NO try/except HERE, DELIBERATELY. This function used to swallow every
+    # exception and return a zero vector "so collection does not crash". That
+    # made a wrong key path indistinguishable from a legitimately empty scene:
+    # Y came out constant, both estimators reported MI ~= 0 for EVERY
+    # condition, and the result looked like a real null. A wrong key path must
+    # fail on the first sample, loudly, not 500 samples later as a plausible
+    # finding. FeatureCollector.collect() additionally asserts that Y is not
+    # constant, so the guard survives even if someone re-adds a fallback here.
+    data_samples = batch['data_samples']
+    sample = (data_samples[0] if isinstance(data_samples, (list, tuple))
+              else data_samples)
+    labels = np.asarray(sample.gt_instances_3d.labels_3d.cpu().numpy())
 
     counts = np.zeros(len(NUSCENES_CLASSES), dtype=np.float32)
     for c in labels:
