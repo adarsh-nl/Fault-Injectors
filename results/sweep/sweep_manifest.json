@@ -1,0 +1,451 @@
+{
+  "seed": 1234,
+  "grid": {
+    "pose_error": {
+      "unit": "pose_sigma",
+      "tiers": {
+        "mild": "0.2m/0.2deg",
+        "moderate": "0.4m/0.4deg",
+        "severe": "0.6m/0.6deg"
+      }
+    },
+    "latency": {
+      "unit": "latency_ms",
+      "tiers": {
+        "mild": "100ms",
+        "moderate": "200ms",
+        "severe": "300ms"
+      }
+    },
+    "agent_drop": {
+      "unit": "drop_frac",
+      "tiers": {
+        "mild": "0.25",
+        "moderate": "0.50",
+        "severe": "0.75"
+      }
+    },
+    "missing_modality": {
+      "unit": "drop_frac",
+      "tiers": {
+        "mild": "0.25",
+        "moderate": "0.50",
+        "severe": "0.75"
+      }
+    },
+    "points_reduce": {
+      "unit": "keep_frac",
+      "tiers": {
+        "mild": "0.30",
+        "moderate": "0.20",
+        "severe": "0.10"
+      }
+    },
+    "lidar_fog": {
+      "unit": "mc_severity",
+      "tiers": {
+        "mild": "sev1",
+        "moderate": "sev2",
+        "severe": "sev3"
+      }
+    },
+    "lidar_snow": {
+      "unit": "mc_severity",
+      "tiers": {
+        "mild": "sev1",
+        "moderate": "sev2",
+        "severe": "sev3"
+      }
+    }
+  },
+  "models": {
+    "cobevt": {
+      "dataset": "v2xset",
+      "setting": "perfect",
+      "data_root": "/datasets/eemcs/ps/cv/opencood/v2xset/test",
+      "model_dir": "~/opencood-eval/cobevt",
+      "expected_frames": 2834,
+      "graded": true,
+      "published": {
+        "ap50": 0.849,
+        "ap70": 0.66
+      }
+    },
+    "where2comm": {
+      "dataset": "v2xset",
+      "setting": "noisy",
+      "data_root": "/datasets/eemcs/ps/cv/opencood/v2xset/test",
+      "model_dir": "~/opencood-eval/where2comm",
+      "expected_frames": 2834,
+      "graded": false,
+      "published": null
+    },
+    "cosdh": {
+      "dataset": "opv2v",
+      "setting": "perfect",
+      "data_root": "/datasets/eemcs/ps/cv/opencood/opv2v/test",
+      "model_dir": "/datasets/eemcs/ps/cv/opencood/cosdh_checkpoints/opv2v_cosdh",
+      "expected_frames": 2170,
+      "graded": false,
+      "published": null
+    },
+    "v2xvit": {
+      "dataset": "v2xset",
+      "setting": "noisy",
+      "data_root": "/datasets/eemcs/ps/cv/opencood/v2xset/test",
+      "model_dir": "/datasets/eemcs/ps/cv/opencood/v2xset_checkpoints/v2x-vit",
+      "expected_frames": 2834,
+      "graded": true,
+      "published": {
+        "ap50": 0.836,
+        "ap70": 0.614
+      }
+    }
+  },
+  "excluded_nodes": [
+    "hpc-node14 (staged pathologically slow; walled job 557245)"
+  ],
+  "policy": {
+    "wild_setting": "shipped per model, unmodified; faults stack on top; clean control measured at the same shipped setting in the same sweep",
+    "clean_control": "unwrapped official pipeline, spec null; wrapper-null offset measured within the determinism floor (job 557236)",
+    "scopes": {
+      "pose_error": "non-ego",
+      "latency": "non-ego",
+      "agent_drop": "non-ego",
+      "missing_modality": "non-ego",
+      "points_reduce": "all",
+      "lidar_fog": "all",
+      "lidar_snow": "all"
+    }
+  },
+  "caveats": {
+    "snow_monotonicity": "TWO SEPARATE FACTS, corrected 2026-08-10 -- the earlier text implied the AP non-monotonicity was general, which the completed grid contradicts. (1) THE REMOVAL-FRACTION INVERSION IS UNIVERSAL AND MODEL-INDEPENDENT. LidarSnow strips MOST points at sev1: measured mean removed fraction on V2XSet is 0.403 / 0.326 / 0.291 for mild / moderate / severe, agreeing to three decimals across all three models (cobevt, where2comm, v2xvit) -- as it must, since the corruption plane runs on the CooperativeSample before any model sees it. The same ordering holds on OPV2V at a higher level (0.578 / 0.516 / 0.489; denser removal, sparser clouds). The mechanism is that the noise-floor stage dominates the scatter stage at low severity. (2) WHETHER IT SURFACES IN AP IS MODEL-DEPENDENT, and mostly it does NOT. Only where2comm on V2XSet inverts in AP@0.7 (mild 0.2228 < moderate 0.2342 > severe 0.2075) -- the ONLY AP inversion in the entire 78-cell grid. cobevt (0.2664 / 0.2566 / 0.2123) and v2xvit (0.1916 / 0.1729 / 0.1345) stay monotone on V2XSet, and where2comm on OPV2V was monotone too (0.2935 / 0.2797 / 0.2337). So the scatter stage dominates AP degradation for most models even where mild strips more points. HYPOTHESIS, NOT ESTABLISHED CAUSE: where2comm may be the one model to show it because its confidence-based selection depends directly on point density, so a removal-heavy mild setting degrades its request/confidence maps more than the added scatter does. This has NOT been tested -- doing so would need the bandwidth/selection columns read alongside AP across the three snow tiers. removed_frac is reported per cell so both facts are checkable in the data.",
+    "agent_drop_scene_counts": "AgentDrop rows are STRATIFIED by scenario initial agent count (post max_cav truncation): one row per (severity, agent-count), with per-stratum clean reference, n_frames and n_scenes. Strata AP is accumulated in the same eval pass (per-frame tp/fp teed by scenario cav count); the overall un-stratified number is deliberately not emitted for agent_drop.",
+    "where2comm_provenance": "THIRD-PARTY RETRAINING, NOT AN AUTHOR RELEASE. The checkpoint is md5-identical (4beff417ffe6c62d76c88acaff63d32c) to the one inside v2xset_checkpoints/point_pillar_where2comm_v2xset.zip, i.e. it is Where2comm trained on V2XSET. V2XSet is the V2X-ViT authors' dataset; the Where2comm paper evaluates on OPV2V, V2X-Sim, DAIR-V2X and CoPerception-UAVs, and the official Where2comm repo releases NO checkpoints at all (verified 2026-08-08: its README has no model zoo). The archive sits in a V2XSet baseline collection beside cobevt_lidar.zip, so it is a re-training published as a V2XSet baseline by a third party. CONSEQUENCE: where2comm is ungraded because no number attributable to the Where2comm authors exists for this model/dataset pair -- the reason is PROVENANCE, not a missing entry in a published table. Read bandwidth beside AP.",
+    "where2comm_modality": "LiDAR only, and that is faithful to the paper. Verified from the paper: the camera and LiDAR tracks are PER-DATASET, not fused, and the LiDAR detector follows PointPillar -- which is exactly this checkpoint (point_pillar_where2comm, SpVoxelPreprocessor, VoxelPostprocessor, zero camera weights in 148 params). Evaluating it on LiDAR reproduces the paper's own LiDAR track; it is not a modality-ablated variant of a fused model."
+  },
+  "graded": {
+    "cobevt": true,
+    "where2comm": false,
+    "cosdh": false,
+    "v2xvit": true
+  },
+  "clean_checks": {
+    "cobevt_b": {
+      "ap_50": 0.849135829509406,
+      "ap_70": 0.6601260108984847,
+      "d50_vs_control": 6.2393173464792e-05,
+      "d70_vs_control": 0.00017942182892694003
+    },
+    "cobevt_c": {
+      "ap_50": 0.8492241677473186,
+      "ap_70": 0.6606002410466114,
+      "d50_vs_control": 2.594506444775213e-05,
+      "d70_vs_control": 0.000294808319199813
+    },
+    "where2comm_b": {
+      "ap_50": 0.8197293550213726,
+      "ap_70": 0.53397447470683,
+      "d50_vs_control": 0.0,
+      "d70_vs_control": 0.0
+    },
+    "where2comm_c": {
+      "ap_50": 0.8197293550213726,
+      "ap_70": 0.53397447470683,
+      "d50_vs_control": 0.0,
+      "d70_vs_control": 0.0
+    },
+    "cosdh_b": {
+      "ap_50": 0.9660287098657948,
+      "ap_70": 0.9289101527474671,
+      "d50_vs_control": 0.0,
+      "d70_vs_control": 0.0
+    },
+    "cosdh_c": {
+      "ap_50": 0.9660287098657948,
+      "ap_70": 0.9289101527474671,
+      "d50_vs_control": 0.0,
+      "d70_vs_control": 0.0
+    },
+    "v2xvit_b": {
+      "ap_50": 0.8408320445173053,
+      "ap_70": 0.6162995436169286,
+      "d50_vs_control": 4.324197287330911e-05,
+      "d70_vs_control": 7.739671867934561e-05
+    },
+    "v2xvit_c": {
+      "ap_50": 0.8408752864901786,
+      "ap_70": 0.616376940335608,
+      "d50_vs_control": 0.0,
+      "d70_vs_control": 0.0
+    }
+  },
+  "failed_cells": [],
+  "flags": [
+    "MIXED-INJECTOR-VERSION lidar_fog: 2 distinct source versions for THIS injector (bdc5c3f7 x9, unstamped (pre-2026-08-10) x3). Its cells were not all produced by the same corruption code and must not be pooled or compared across versions.",
+    "where2comm/agent_drop[n=5]/mild: POSITIVE delta_ap70 +0.0012 (fault improved AP)",
+    "GATE-NO-CONTEMPORANEOUS-REF cosdh: wrapped_null (job ?) has no same-job unwrapped reference; the gate CANNOT be evaluated and fails closed",
+    "v2xvit: part-b clean differs from control beyond 10x floor (d50=4.32e-05 d70=7.74e-05)",
+    "NOT-APPLICABLE (6 cells, excluded from all rankings): cosdh/agent_drop/mild, cosdh/agent_drop/moderate, cosdh/agent_drop/severe, cosdh/missing_modality/mild, cosdh/missing_modality/moderate, cosdh/missing_modality/severe"
+  ],
+  "wrapped_null_gate": {
+    "cobevt": {
+      "reference_source": "null_gate/cobevt/unwrapped (same job 559457)",
+      "unwrapped_shipped": {
+        "ap_50": 0.8493582393949849,
+        "ap_70": 0.6604358001257067
+      },
+      "wrapped_null": {
+        "ap_50": 0.8493395901271326,
+        "ap_70": 0.6604387442379394
+      },
+      "d50": 1.8649267852333118e-05,
+      "d70": 2.9441122326723246e-06,
+      "floor_used": 0.0001,
+      "verdict": "PASS"
+    },
+    "where2comm": {
+      "reference_source": "none/clean (same job 559458)",
+      "unwrapped_shipped": {
+        "ap_50": 0.8197293550213726,
+        "ap_70": 0.53397447470683
+      },
+      "wrapped_null": {
+        "ap_50": 0.8197293550213726,
+        "ap_70": 0.53397447470683
+      },
+      "d50": 0.0,
+      "d70": 0.0,
+      "floor_used": 0.0001,
+      "verdict": "PASS"
+    },
+    "cosdh": "MISSING (no contemporaneous reference)",
+    "v2xvit": {
+      "reference_source": "none/clean (same job 558720)",
+      "unwrapped_shipped": {
+        "ap_50": 0.8408752864901786,
+        "ap_70": 0.616376940335608
+      },
+      "wrapped_null": {
+        "ap_50": 0.8408752864901786,
+        "ap_70": 0.616376940335608
+      },
+      "d50": 0.0,
+      "d70": 0.0,
+      "floor_used": 0.0001,
+      "verdict": "PASS"
+    }
+  },
+  "superseded": {
+    "scope": "AP columns only (clean_ap*, faulty_ap*, delta_*, rel_drop_*) of v2xvit and where2comm rows produced before the 2026-08-06 pose-composition fix.",
+    "reason": "from_canonical recomputed transformation_matrix from params['lidar_pose'], silently discarding OpenCOOD's shipped add_loc_noise perturbation (applied to a local copy, never written back). Null-wrapper matrix error with NO fault injected: 0.177 (where2comm), 0.205 (v2xvit). CoBEVT ships loc_err=false so its error was 0.000 and its cells are UNAFFECTED.",
+    "fix": "transformation_matrix is now composed as a delta onto the baked matrix: T_new = T_orig @ inv(A_clean) @ A_perturbed (right-multiply, derived from T_agent->ego point-transform convention). Invariant to cur_ego_pose_flag and to shipped noise, since both live only inside T_orig.",
+    "still_valid_from_those_runs": [
+      "injection_summary.csv rows and all fire-checks",
+      "lidar_snow removed_frac / scatter mechanics",
+      "n_frames, n_injections, agent-count strata denominators",
+      "cobevt rows in full (gate measured 0.000)"
+    ],
+    "models_affected": [
+      "v2xvit",
+      "where2comm"
+    ]
+  },
+  "cora_notes": {
+    "purpose": "FOR THE WRITEUP, NOT FOR ACTION.",
+    "seed_pair_is_not_hardware_matched": "The two CoRA full runs (559639 seed 2026, 559640 seed 2029) landed on DIFFERENT GPU SKUs -- 559639 on an L40S (hpc-node12), 559640 on an L40 (hpc-node08). Both are permitted by --constraint=a40|a100|l40|l40s. The pair was launched to give a SEED-VARIANCE datapoint, so that the comparison against the published 0.9341/0.8658 is interpretable rather than ambiguous at n=1. Because the SKUs differ, the AP spread between the two seeds carries a HARDWARE component alongside the seed component and MUST NOT be reported as pure seed variance. Scale of the hardware term, measured elsewhere in this project: the cross-SKU determinism floor is ~4e-5 AP (v2xvit part-a vs part-b), i.e. three orders below any fault delta -- so it is very unlikely to dominate a seed spread, but it is not zero and it was not controlled."
+  },
+  "gt_union_confound": {
+    "status": "MEASURED, NOT YET CORRECTED FOR. Affects agent_drop rows only.",
+    "finding": "GT is assembled as the UNION over CAVs: both vanilla OpenCOOD (IntermediateFusionDataset accumulates object_bbx_center over all in-range CAVs, then de-duplicates) and CoSDH build it the same way. So agent_drop removes GT BOXES ALONG WITH THE AGENT -- it changes the EVALUATION TARGET, not only the model input.",
+    "measured": "Dataset-level, 40 frames, CoBEVT config on V2XSet test: GT totals 832 (clean) -> 818 / 790 / 769 at p_drop = 0.25 / 0.50 / 0.75, i.e. -1.68% / -5.05% / -7.57%. Monotone in p; the majority of frames shrink at p>=0.50.",
+    "why_it_biases": "Recall = TP/GT. A smaller GT inflates recall for the same detections, so the measured degradation is biased TOWARD LOOKING MILDER than it is. agent_drop is currently reported as the LEAST damaging fault in the grid, so part of that gap is an artifact.",
+    "affected": [
+      "Fig 4 entirely (stratified agent-drop panel; the per-stratum clean references are computed at the stratum's natural agent count while the faulted bars have had agents removed, so reference and bar are not evaluated against the same GT set)",
+      "Fig 3, agent_drop row and its position in the ordering"
+    ],
+    "not_affected": [
+      "Fig 2 (agent_drop is already a hatched not-poolable band there)",
+      "pose_error, latency, points_reduce, lidar_fog, lidar_snow -- all leave the agent SET intact",
+      "missing_modality -- it empties a cloud but KEEPS the agent in the dict, so on the OpenCOOD path that CAV still contributes its GT objects. Its denominator is stable. This is a genuine asymmetry between the two \"lost collaborator\" faults, which the figures currently present as a pair."
+    ],
+    "limits": "n_gt is NOT recorded in the OpenCOOD result bundles (only n_frames), and the 4MB eval.yaml dumps carry only ap30/ap_50/ap_70 and the PR curves -- so the per-cell shrinkage CANNOT be quantified from data already on disk. The figure above is a 40-frame dataset-level sample on one model's config on V2XSet: it establishes the mechanism and rough scale, NOT a correction factor. Recording n_gt per cell is a prerequisite for any correction."
+  },
+  "cosdh_notes": {
+    "purpose": "CoSDH protocol facts. These change how its numbers may be read and are recorded here rather than only in src/adapters/cosdh.py.",
+    "not_gradeable_against_published": "The released checkpoints were RETRAINED and, per the release README, \"differ slightly from those reported in the paper\". CoSDH is therefore NOT gradeable against the published 96.83 / 92.99 the way CoBEVT and V2X-ViT are graded. Measured clean baseline (gate 1, job 561691, 2170 frames, 32244 gt): AP@0.5 = 0.9660 (-0.0023 vs paper), AP@0.7 = 0.9289 (-0.0010). It IS an author release, which is stronger evidence than where2comm's third-party retrain, but the published number is not its oracle.",
+    "shipped_setting_is_perfect": "CoSDH ships noise_setting: {add_noise: false} -- there is no loc_err/async wild_setting at all. It is effectively PERFECT-shipped and GROUPS WITH COBEVT, not with the two Noisy models (v2xvit, where2comm).",
+    "injected_sigma_is_total_not_increment": "Because the shipped pose noise is zero, an injected pose sigma is the TOTAL pose error. For v2xvit and where2comm the same sigma stacks on top of a shipped loc_err perturbation, so equal sigma does NOT mean equal total error across models.",
+    "agent_drop_and_missing_modality_are_dual_channel": "CoSDH is intermediate-LATE hybrid: collaborators contribute a feature channel AND a detection channel (non-ego detections are thresholded at confidence_threshold 0.3 and scaled by confidence_beta 0.9, then fused). agent_drop and missing_modality remove an agent from BOTH channels at once, a STRICTLY LARGER INTERVENTION than on the three pure-intermediate models. Those two rows are not directly comparable to the others without this footnote.",
+    "provenance_stamping_is_partial": "TWO DIFFERENT SCOPES ARE IN PLAY HERE AND BOTH ARE TRUE -- do not collapse them. (a) MIXED-VERSION scope = 3 cells. lidar_fog is the only injector for which the other three models ARE stamped (bdc5c3f7 x9) while CoSDH is not, so cosdh/lidar_fog/{mild,moderate,severe} are the only cells that create a mixed-version COMPARISON hazard. That is what the MIXED-INJECTOR-VERSION flag reports and it is correctly scoped at 3. (b) UNSTAMPED scope = 20 cells. Measured 2026-08-18 across all 20 bundles: EVERY pre-existing CoSDH cell lacks job_id, wrapper_contract_version, injector_sha256, injector_files_sha256 and injector_contract_version. For the other six injectors this does not show up as \"mixed\" only because the other three models are unstamped there too -- uniform ignorance, not uniform provenance. The 3-cell number answers \"where can I not pool cells?\"; the 20-cell number answers \"which CoSDH cells can I trace to a job?\". tools/cosdh_inference.py only began writing those fields on 2026-08-18; the cells were produced 2026-08-13. WHAT THE CELLS DO CARRY, on all 20: cosdh_adapter_sha256 = 3f7230d4868c2b34 and cosdh_contract_version = 1, identical on every cell and identical to the current src/adapters/cosdh.py (sha256 3f7230d4868c2b34..., stored truncated to 16 chars). src/adapters/cosdh.py is the file that wires all six non-pose injectors and the pose hook, so the FAULT-DETERMINING code is digest-confirmed byte-identical to the stamped version for every cell. What is unconfirmed by digest is the shared src/fault_injectors code underneath it. REMEDIATION AND ITS LIMIT: the gate re-run (none/clean + none/wrapped_null, one job, contemporaneous by construction) restamps TWO cells. The other 18 were deliberately NOT re-run -- ~30 GPU-hours to change a provenance field and no AP. So 18 of 20 cells remain job_id-less after remediation. THEIR LINEAGE IS NEVERTHELESS RECORDED, NOT INFERENTIAL -- this corrects an earlier statement here that called it inferential. Every bundle carries model_dir = /local/<SLURM_JOB_ID>/model, because the checkpoint is staged into per-job node-local scratch, so the job id is recoverable from a field that was always written. Measured 2026-08-18, all 20 cells resolve: job 562333 -> 12 cells (latency x3, points_reduce x3, pose_error x3, none/clean, none/clean_rep, none/wrapped_null); 562334 -> 4 (lidar_fog x3, none/clean_b); 562335 -> 3 (lidar_snow mild+moderate, none/clean_c); 565554 -> 1 (lidar_snow/severe). Three of the four sweep jobs carried their own clean control; 565554 did not. CONSEQUENCE FOR THE GATE, stated plainly: none/clean and none/wrapped_null WERE ALREADY CONTEMPORANEOUS -- both come from job 562333. The gate did not fail because the cells were produced at different times; it failed because it reads the job_id FIELD, which the driver did not write, while the lineage sat in model_dir unread. The re-run is therefore a re-stamp of something already true, not the establishment of a new fact, and it doubles as an independent determinism check. model_dir was NOT retro-written into job_id: backfilling a provenance field by inference is the failure mode this whole census exists to prevent. Treat this the way V2X-ViT lidar_snow/mild is treated -- a known, bounded provenance gap that is stated rather than silently closed -- but note it is 18 cells here versus 1 there. PRE-REGISTERED EXPECTATION FOR THE RE-RUN, stated before it landed: the superseded pre-stamp pair (preserved, not deleted, at results/sweep/cosdh_PRESTAMP_gate_pair/ -- not a MODELS key, so inert to the aggregator) already gives ap_50 = ap_70 delta of EXACTLY 0.0 between clean and wrapped_null (both 0.966028710 / 0.928910153, n_gt 32244). The gate was therefore never failing on a real wrapper delta -- only on the absence of a same-job_id reference. The re-run should reproduce 0.0 / 0.0 and clean AP identical to 9 decimal places. If the re-run's clean AP MOVES, that is not a gate result, it is evidence of run-to-run nondeterminism in the CoSDH path and must be reported as such rather than absorbed.",
+    "env_not_byte_identical": "CoSDH runs in the separate `cosdh` conda env, which is NOT byte-identical to the `opencood-official` env that produced the other three models' results: numpy 1.21.5 vs 1.21.6, PIL 9.4.0 vs 9.5.0 (torch 1.12.1+cu113 and spconv 2.3.6 match). Internally consistent for CoSDH's own cells, but a cross-model comparability caveat. opencood-official was deliberately NOT mutated -- it produced all previously reported results."
+  },
+  "v2xvit_notes": {
+    "purpose": "FOR THE WRITEUP, NOT FOR ACTION. Both items below are recorded so the provenance story is complete; neither invalidates a cell and neither requires a re-run.",
+    "snow_mild_unstamped": "results/sweep/v2xvit/lidar_snow/mild was written by job 558721, which predates wrapper-contract-version stamping, so the bundle carries no wrapper_contract_version field. It is clean by JOB-ID LINEAGE only (558721 belongs to the post-fix vit2 re-run set, not to the quarantined prefix jobs 558077/558106). It is the one v2xvit cell the contract-version guard cannot positively verify. The other two snow cells (moderate, severe) come from 559219 and are stamped version 2.",
+    "determinism_floor_is_per_node": "The part-b clean control differs from the part-a clean control by d50=4.32e-05, d70=7.74e-05 -- above the 1e-4-scaled gate floor derived from the part-a clean/clean_rep pair, which is why the aggregator flags it. Cause: parts a and b landed on DIFFERENT GPU SKUs under --constraint=a40|a100|l40|l40s. So the determinism floor is PER-NODE, not global: within one node the repeat is bit-exact (d=0.0), across SKUs it is ~4e-5. The wrapped-null gate is unaffected because clean, clean_rep and wrapped_null all live in part a and therefore ran on one node. ~4e-5 is three orders below any fault delta, so no AP comparison is affected; the lesson is that a single SKU must be pinned across all parts of a model, which is what the where2comm V2XSet re-run does (--constraint=l40)."
+  },
+  "superseded_domain_pairing": {
+    "model": "where2comm",
+    "moved_to": "results/sweep/where2comm_SUPERSEDED_opv2v_eval/",
+    "scope": "ALL 26 cells of the previous where2comm sweep -- every AP number, every delta, every rel_drop.",
+    "reason": "The checkpoint is V2XSET-trained but was evaluated on OPV2V test: a DOMAIN MISMATCH, so its clean control and every degradation measured against it describe a cross-domain model, not the model as trained. The config's root_dir: /data/opv2x/train is the author's shorthand and was mistaken for evidence of OPV2V; the md5 match against point_pillar_where2comm_v2xset.zip is the decisive evidence and it says V2XSet.",
+    "fix": "where2comm re-paired with its training domain, v2xset/test (2834 frames), and the full grid re-run including the mandatory none/wrapped_null gate cell.",
+    "still_valid_from_those_runs": [
+      "injection_summary.csv rows and all fire-checks -- the injectors fired correctly, they simply fired on the wrong evaluation domain",
+      "lidar_snow removed_frac / scatter mechanics (a property of the point clouds and the injector, not of the checkpoint)",
+      "the wrapper round-trip evidence"
+    ],
+    "not_valid": [
+      "every AP, delta and rel_drop column"
+    ],
+    "aggregator_visibility": "NONE. aggregate.py discovers cells by iterating MODELS.keys() and joining <root>/<model>, so a directory not named by a MODELS key is unreachable. The superseded tree is therefore inert, not merely ignored."
+  },
+  "injector_versions": {
+    "agent_drop": {
+      "unstamped (pre-2026-08-10)": {
+        "n_cells": 9,
+        "cells": [
+          "cobevt/agent_drop/mild",
+          "cobevt/agent_drop/moderate",
+          "cobevt/agent_drop/severe",
+          "v2xvit/agent_drop/mild",
+          "v2xvit/agent_drop/moderate",
+          "v2xvit/agent_drop/severe",
+          "where2comm/agent_drop/mild",
+          "where2comm/agent_drop/moderate",
+          "where2comm/agent_drop/severe"
+        ]
+      }
+    },
+    "latency": {
+      "unstamped (pre-2026-08-10)": {
+        "n_cells": 12,
+        "cells": [
+          "cobevt/latency/mild",
+          "cobevt/latency/moderate",
+          "cobevt/latency/severe",
+          "cosdh/latency/mild",
+          "cosdh/latency/moderate",
+          "cosdh/latency/severe",
+          "v2xvit/latency/mild",
+          "v2xvit/latency/moderate",
+          "v2xvit/latency/severe",
+          "where2comm/latency/mild",
+          "where2comm/latency/moderate",
+          "where2comm/latency/severe"
+        ]
+      }
+    },
+    "lidar_fog": {
+      "bdc5c3f7": {
+        "n_cells": 9,
+        "cells": [
+          "cobevt/lidar_fog/mild",
+          "cobevt/lidar_fog/moderate",
+          "cobevt/lidar_fog/severe",
+          "v2xvit/lidar_fog/mild",
+          "v2xvit/lidar_fog/moderate",
+          "v2xvit/lidar_fog/severe",
+          "where2comm/lidar_fog/mild",
+          "where2comm/lidar_fog/moderate",
+          "where2comm/lidar_fog/severe"
+        ]
+      },
+      "unstamped (pre-2026-08-10)": {
+        "n_cells": 3,
+        "cells": [
+          "cosdh/lidar_fog/mild",
+          "cosdh/lidar_fog/moderate",
+          "cosdh/lidar_fog/severe"
+        ]
+      }
+    },
+    "lidar_snow": {
+      "unstamped (pre-2026-08-10)": {
+        "n_cells": 12,
+        "cells": [
+          "cobevt/lidar_snow/mild",
+          "cobevt/lidar_snow/moderate",
+          "cobevt/lidar_snow/severe",
+          "cosdh/lidar_snow/mild",
+          "cosdh/lidar_snow/moderate",
+          "cosdh/lidar_snow/severe",
+          "v2xvit/lidar_snow/mild",
+          "v2xvit/lidar_snow/moderate",
+          "v2xvit/lidar_snow/severe",
+          "where2comm/lidar_snow/mild",
+          "where2comm/lidar_snow/moderate",
+          "where2comm/lidar_snow/severe"
+        ]
+      }
+    },
+    "missing_modality": {
+      "unstamped (pre-2026-08-10)": {
+        "n_cells": 9,
+        "cells": [
+          "cobevt/missing_modality/mild",
+          "cobevt/missing_modality/moderate",
+          "cobevt/missing_modality/severe",
+          "v2xvit/missing_modality/mild",
+          "v2xvit/missing_modality/moderate",
+          "v2xvit/missing_modality/severe",
+          "where2comm/missing_modality/mild",
+          "where2comm/missing_modality/moderate",
+          "where2comm/missing_modality/severe"
+        ]
+      }
+    },
+    "points_reduce": {
+      "unstamped (pre-2026-08-10)": {
+        "n_cells": 12,
+        "cells": [
+          "cobevt/points_reduce/mild",
+          "cobevt/points_reduce/moderate",
+          "cobevt/points_reduce/severe",
+          "cosdh/points_reduce/mild",
+          "cosdh/points_reduce/moderate",
+          "cosdh/points_reduce/severe",
+          "v2xvit/points_reduce/mild",
+          "v2xvit/points_reduce/moderate",
+          "v2xvit/points_reduce/severe",
+          "where2comm/points_reduce/mild",
+          "where2comm/points_reduce/moderate",
+          "where2comm/points_reduce/severe"
+        ]
+      }
+    },
+    "pose_error": {
+      "unstamped (pre-2026-08-10)": {
+        "n_cells": 12,
+        "cells": [
+          "cobevt/pose_error/mild",
+          "cobevt/pose_error/moderate",
+          "cobevt/pose_error/severe",
+          "cosdh/pose_error/mild",
+          "cosdh/pose_error/moderate",
+          "cosdh/pose_error/severe",
+          "v2xvit/pose_error/mild",
+          "v2xvit/pose_error/moderate",
+          "v2xvit/pose_error/severe",
+          "where2comm/pose_error/mild",
+          "where2comm/pose_error/moderate",
+          "where2comm/pose_error/severe"
+        ]
+      }
+    }
+  },
+  "not_applicable": {
+    "cosdh/agent_drop": "NOT a fusion failure -- unlike cosdh/missing_modality, and the two must not be read as one finding. WHAT IS MEASURED: the cell dies in GROUND-TRUTH ASSEMBLY at base_postprocessor.py:110, `torch.from_numpy(gt_box3d_np).to(device=gt_box3d_list[0].device)`, with IndexError: index 0 is out of bounds for dimension 0 with size 0 -- i.e. the stacked GT tensor has ZERO ROWS. This is BEFORE AP is computed. The loop runs exactly ONCE, over the ego, because the caller passes data_dict_gt['ego'] alone (intermediate_late_fusion_dataset.py:647), so the list is empty because its single entry was empty, not because the loop never ran. record_len is CONSISTENT here (measured: record_len=1 with exactly 1 agent producing features), which is why this is not the missing_modality mechanism. WHAT IS NOT ESTABLISHED -- stated plainly: THE MECHANISM PRODUCING THE EMPTY TENSOR IS NOT ESTABLISHED. This cell is reported as not-applicable on the basis of an OBSERVED failure, not an explained one. Three dataset-level hypotheses were measured and REFUTED -- a record_len mismatch; ego-alone frames yielding empty GT (ego-alone frames are common, 14/29/39 of the first 60 at p=0.25/0.50/0.75, but GT survives at 18-20 boxes); and empty GT at all (no frame in the first 60 yields zero GT; the minimum is 9). Decisively, THE FRAME THE SWEEP DIED ON (index 3) had one non-ego agent still present and GT of 20, IDENTICAL TO CLEAN -- at dataset level it is indistinguishable from an unfaulted frame. The cause therefore lies BETWEEN the dataset and the inference loop (collation, the model forward, or post_process, which runs before generate_gt_bbx), and settling it would require reproducing the crash under the real inference path. That was not done: the grid consequence is identical either way. This is a property of the RELEASED EVALUATION PATH, not of the fusion architecture, and it is a WEAKER claim than the missing_modality finding. The paper does not test collaborator dropout and does not claim robustness to it.",
+    "cosdh/missing_modality": "Same root cause as cosdh/agent_drop. A retained agent with a ZERO-POINT cloud produces no voxels, so record_len over-counts the agents that produced features (RuntimeError: Expected size for first two dimensions of batch2 tensor to be: [1, 3] but got: [2, 3] at fusion_in_one.py:507). Fails at every severity within the first few frames. Property of the released inference path, not of the method."
+  },
+  "missing_cells": [],
+  "not_applicable_cells": [
+    "cosdh/agent_drop/mild",
+    "cosdh/agent_drop/moderate",
+    "cosdh/agent_drop/severe",
+    "cosdh/missing_modality/mild",
+    "cosdh/missing_modality/moderate",
+    "cosdh/missing_modality/severe"
+  ]
+}

@@ -75,6 +75,15 @@ cora-nan-diag/
 !/results/apf/**
 # Gate 0 measured tables. Small JSON, and every APF number is now indexed
 # against them, so they are provenance, not scratch output.
+# Sweep aggregate and manifest. 109 rows across four operators, not
+# regenerable without rerunning every cell on GPU. Per-cell bundles and
+# SUPERSEDED trees stay ignored via the /results/sweep/* rule below.
+!/results/sweep/
+/results/sweep/*
+!/results/sweep/sweep_results.csv
+!/results/sweep/sweep_manifest.json
+!/results/figures/
+!/results/figures/**
 !/results/fault_injector_visualisation/
 !/results/fault_injector_visualisation/**
 /results/fault_injector_visualisation/**/*.mp4
