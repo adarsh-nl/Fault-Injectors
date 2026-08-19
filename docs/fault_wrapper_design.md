@@ -6,7 +6,8 @@ hard blocker on *reading* the design's prerequisites and is 3 lines.
 
 Scope: inject the 5 verified injectors (PoseError, CommLatency, AgentDrop,
 MissingModality-LiDAR, PointsReduce) into the three verified baselines
-(V2X-ViT/V2XSet, CoBEVT/V2XSet, Where2comm/OPV2V) through a **thin per-dataset
+(V2X-ViT/V2XSet, CoBEVT/V2XSet, Where2comm/V2XSet — corrected 2026-08-08,
+its checkpoint is V2XSet-trained) through a **thin per-dataset
 adapter onto the existing canonical `CooperativeSample`/`AgentFrame`**, with the
 injectors themselves staying dataset- and framework-agnostic.
 

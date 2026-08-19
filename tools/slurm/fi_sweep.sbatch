@@ -31,8 +31,10 @@ CODE_ROOT="$HOME/opencood-official"
 case "$MODEL" in
   cobevt)     MODEL_DIR="$HOME/opencood-eval/cobevt"
               DATA_SRC="/datasets/eemcs/ps/cv/opencood/v2xset/test" ;;
+  # where2comm checkpoint is V2XSET-trained (md5-identical to
+  # point_pillar_where2comm_v2xset.zip); paired with V2XSet test.
   where2comm) MODEL_DIR="$HOME/opencood-eval/where2comm"
-              DATA_SRC="/datasets/eemcs/ps/cv/opencood/opv2v/test" ;;
+              DATA_SRC="/datasets/eemcs/ps/cv/opencood/v2xset/test" ;;
   v2xvit)     MODEL_DIR="/datasets/eemcs/ps/cv/opencood/v2xset_checkpoints/v2x-vit"
               DATA_SRC="/datasets/eemcs/ps/cv/opencood/v2xset/test"
               NS=v2xvit

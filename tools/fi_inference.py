@@ -45,6 +45,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.adapters import FaultSpec, make_faulty_dataset   # noqa: E402
 from src.adapters.opencood import wrapper_fingerprint     # noqa: E402
+from src.fault_injectors import injector_fingerprint      # noqa: E402
 
 # The conditions this PoC runs. `clean` is a NULL pipeline that still traverses
 # the whole adapter round trip, so Gate 2 tests the adapter and not a bypass.
@@ -210,6 +211,16 @@ def main():
 
     def _eval(result_stat, save_path, *rest):
         out = _orig_eval(result_stat, args.fi_out, *rest)
+        # n_gt added 2026-08-17. GT is the UNION over CAVs, so agent_drop
+        # removes GT boxes along with the agent and its denominator MOVES
+        # with severity (-2.8/-5.8/-8.5% measured on 200 V2XSet frames).
+        # Without n_gt that shift cannot be quantified per cell. Cells run
+        # BEFORE this date carry no n_gt and are NOT backfilled -- see
+        # manifest['gt_union_confound'].
+        try:
+            captured['n_gt'] = int(result_stat[0.5]['gt'])
+        except Exception:                                 # pragma: no cover
+            captured['n_gt'] = -1
         try:
             import yaml
             with open(os.path.join(args.fi_out, 'eval.yaml')) as fh:
@@ -227,8 +238,12 @@ def main():
             except Exception as exc:              # pragma: no cover
                 print('[fi] stratum %d AP failed: %r' % (ncav, exc))
                 continue
+            try:
+                st_gt = int(st[0.5]['gt'])
+            except Exception:                             # pragma: no cover
+                st_gt = -1
             strata[str(ncav)] = {
-                'ap_50': a50, 'ap_70': a70,
+                'ap_50': a50, 'ap_70': a70, 'n_gt': st_gt,
                 'n_frames': frame_stratum.count(ncav),
                 'n_scenes': stratum_scenes.get(ncav, 0)}
         if strata:
@@ -240,12 +255,17 @@ def main():
                        'seed': args.fi_seed,
                        'spec': spec.as_dict() if spec else None,
                        'model_dir': args.model_dir,
+                       'n_gt': captured.get('n_gt', -1),
                        'wild_setting_shipped': shipped_wild,
                        'wild_forced_off': bool(args.fi_force_wild_off),
                        'n_frames': n_frames.get('n'),
                        # provenance: judge a cell by WHAT PRODUCED IT,
                        # not by a hand-kept job-id list.
                        **wrapper_fingerprint(),
+                       # injector sources: the wrapper hash covers
+                       # src/adapters/ only and would not move when
+                       # an INJECTOR changes.
+                       **injector_fingerprint(),
                        'job_id': os.environ.get('SLURM_JOB_ID'),
                        'ap_30': captured.get('ap30'),
                        'ap_50': captured.get('ap_50'),

@@ -3,7 +3,7 @@
   "coverage": [
     {"operator": "cobevt",     "checkpoint": "cobevt_lidar",                   "dataset": "v2xset", "domain": "in_domain", "protocol": {"compression": 32, "noise_trained": false, "backbone_fix": true}},
     {"operator": "v2xvit",     "checkpoint": "v2x-vit",                        "dataset": "v2xset", "domain": "in_domain", "protocol": {"compression": 32, "noise_trained": true,  "backbone_fix": true}},
-    {"operator": "where2comm", "checkpoint": "point_pillar_where2comm_v2xset", "dataset": "opv2v",  "domain": "in_domain", "protocol": {"compression": 0,  "noise_trained": true,  "backbone_fix": false}}
+    {"operator": "where2comm", "checkpoint": "point_pillar_where2comm_v2xset", "dataset": "v2xset", "domain": "in_domain", "provenance": "third_party_retrain", "graded": false, "graded_reason": "no author-attributable number exists: V2XSet is not a Where2comm dataset and the official repo releases no checkpoints", "protocol": {"compression": 0,  "noise_trained": true,  "backbone_fix": false}}
   ],
   "faults": {
     "pose_error":      {"severities": ["0.2m", "0.4m", "0.6m"],    "headline": "0.6m"},

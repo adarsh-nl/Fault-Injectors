@@ -20,7 +20,7 @@ published number.
 |---|---|---|---|---|---|
 | **CoBEVT** | `cobevtbench/` | `point_pillar_cobevt` (LiDAR **detection**) — *and* `corpbevt` (camera **segmentation**) | AP@0.5/0.7 / IoU | V2XSet + OPV2V | **yes, four of them** |
 | **V2X-ViT** | `v2xvitbench/` | `point_pillar_transformer` (LiDAR detection) | AP@0.5/0.7 | V2XSet | yes (1) |
-| **Where2comm** | `w2cbench/` | `point_pillar_where2comm` (LiDAR detection) | AP@0.5/0.7 + bandwidth | OPV2V (see §5) | yes (1) |
+| **Where2comm** | `w2cbench/` | `point_pillar_where2comm` (LiDAR detection) | AP@0.5/0.7 + bandwidth | **V2XSet** — the checkpoint is V2XSet-trained (see §5). The *paper* uses OPV2V / V2X-Sim / DAIR-V2X / CoPerception-UAVs, not V2XSet | yes (1), third-party |
 | **CoRA** | `corabench/` | reconstruction from the paper | AP@0.5/0.7 | OPV2V / DAIR-V2X | **none exist** |
 
 ---

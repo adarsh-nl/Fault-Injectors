@@ -130,3 +130,36 @@ for _name, (_mod, _attr) in _OPTIONAL.items():
     __all__.append(_name)
 
 del _importlib, _name, _mod, _attr
+
+
+# ── injector source fingerprint ────────────────────────────────────────
+# Added 2026-08-10 with the lidar_fog intensity-scale fix. The adapter
+# fingerprint in src/adapters/ covers the WRAPPER only, so a change to an
+# INJECTOR -- which is what actually corrupts the points -- was invisible in
+# the result bundles. The fog fix makes the grid genuinely mixed-version, and
+# a mixed-version grid must be visible rather than silently averaged across.
+INJECTOR_CONTRACT_VERSION = 1
+
+
+def injector_fingerprint() -> dict:
+    """Content hash of the injector sources that determine a cell's numbers.
+
+    Hash of the working tree, not a git SHA: the tree is what actually ran and
+    is routinely ahead of any commit, so uncommitted edits must still move the
+    fingerprint. Per-file digests are included so a mixed-version grid can be
+    attributed to the specific injector that changed rather than only flagged.
+    """
+    import hashlib
+    import os
+    here = os.path.dirname(os.path.abspath(__file__))
+    names = sorted(n for n in os.listdir(here)
+                   if n.endswith('.py') and n != '__init__.py')
+    per, h = {}, hashlib.sha256()
+    for n in names:
+        with open(os.path.join(here, n), 'rb') as fh:
+            b = fh.read()
+        h.update(b)
+        per[n[:-3]] = hashlib.sha256(b).hexdigest()[:8]
+    return {'injector_contract_version': INJECTOR_CONTRACT_VERSION,
+            'injector_sha256': h.hexdigest()[:16],
+            'injector_files_sha256': per}

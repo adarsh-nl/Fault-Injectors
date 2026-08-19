@@ -42,7 +42,17 @@ authors' setting on its native dataset. All three are LiDAR-only.
 |---|---|---|---|---|
 | V2X-ViT | V2XSet | Noisy | 0.84 / 0.62 | 0.836 / 0.614 |
 | CoBEVT | V2XSet | Perfect | 0.85 / 0.66 | 0.849 / 0.660 |
-| Where2comm | OPV2V | Noisy | 0.86 / 0.60 | no published oracle, ungraded |
+| Where2comm | V2XSet | Noisy | *re-running* | ungraded — third-party retrain, no author release |
+
+Where2comm's AP is blank on purpose. Its checkpoint is **V2XSet-trained**
+(md5-identical to `point_pillar_where2comm_v2xset.zip`) but had been evaluated
+on OPV2V — a domain mismatch, so the previous 0.86 / 0.60 measured a
+cross-domain model and has been withdrawn to
+`results/sweep/where2comm_SUPERSEDED_opv2v_eval/`. The V2XSet re-run is in
+flight. It stays **ungraded for provenance**: V2XSet is the V2X-ViT authors'
+dataset, the Where2comm paper uses OPV2V / V2X-Sim / DAIR-V2X /
+CoPerception-UAVs, and the official Where2comm repo releases no checkpoints at
+all — so no number attributable to its authors exists for this pair.
 
 When our injectors run, OpenCOOD's built-in `wild_setting` noise
 (`loc_err`, `async`) is forced off and the clean control is re-measured at

@@ -80,11 +80,36 @@ MODELS = {
         'published': {'ap50': 0.849, 'ap70': 0.660},
     },
     'where2comm': {
-        'dataset': 'opv2v', 'setting': 'noisy',
-        'data_root': '/datasets/eemcs/ps/cv/opencood/opv2v/test',
+        # CORRECTED 2026-08-08. The checkpoint is V2XSET-trained: its md5
+        # (4beff417ffe6c62d76c88acaff63d32c) is identical to the one inside
+        # /datasets/.../v2xset_checkpoints/point_pillar_where2comm_v2xset.zip,
+        # and its config is byte-identical to that archive's. It was
+        # previously paired with OPV2V test -- a domain mismatch. The
+        # config's `root_dir: /data/opv2x/train` is the author's shorthand,
+        # NOT evidence of OPV2V.
+        'dataset': 'v2xset', 'setting': 'noisy',
+        'data_root': '/datasets/eemcs/ps/cv/opencood/v2xset/test',
         'model_dir': '~/opencood-eval/where2comm',
-        'expected_frames': None,     # filled by its clean run
-        'graded': False,             # no published oracle at this setting
+        'expected_frames': 2834,
+        # Ungraded for PROVENANCE, not for a missing table entry: V2XSet is
+        # not a Where2comm dataset (the paper uses OPV2V, V2X-Sim, DAIR-V2X,
+        # CoPerception-UAVs), so this is a THIRD-PARTY retraining published
+        # as a V2XSet baseline, not an author release. No published number
+        # exists that is the Where2comm authors' own.
+        'graded': False,
+        'published': None,
+    },
+    'cosdh': {
+        # CoSDH (CVPR 2025) -- an OpenCOOD FORK, own env/driver/adapter.
+        # Ships noise_setting {add_noise: false}: PERFECT, groups with cobevt.
+        # NOT gradeable against the paper's 0.9683/0.9299 -- the released
+        # checkpoints are retrained (release README). Measured clean baseline
+        # (gate 1, job 561691): 0.9660 / 0.9289.
+        'dataset': 'opv2v', 'setting': 'perfect',
+        'data_root': '/datasets/eemcs/ps/cv/opencood/opv2v/test',
+        'model_dir': '/datasets/eemcs/ps/cv/opencood/cosdh_checkpoints/opv2v_cosdh',
+        'expected_frames': 2170,
+        'graded': False,
         'published': None,
     },
     'v2xvit': {
